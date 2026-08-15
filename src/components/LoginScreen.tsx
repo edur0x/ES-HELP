@@ -17,10 +17,10 @@ const FIXED_USERS: Record<string, { pass: string; user: User }> = {
     }
   },
   tecnico: {
-    pass: 'tecnico123',
+    pass: 'tecnico01',
     user: {
       login: 'tecnico',
-      nome: 'Rafael Silva (Técnico TI)',
+      nome: 'Eduardo (Técnico TI)',
       perfil: 'Técnico'
     }
   }
