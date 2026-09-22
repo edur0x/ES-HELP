@@ -2,14 +2,15 @@ import React from 'react';
 import { Chamado } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
-import { Clock, CheckCircle2, User, Laptop, Tag, Layers, FileText, Wrench, X } from 'lucide-react';
+import { Clock, CheckCircle2, User, Laptop, Tag, Layers, FileText, Wrench, X, MessageSquare, Paperclip } from 'lucide-react';
 
 interface ChamadoDetailsModalProps {
   chamado: Chamado | null;
   onClose: () => void;
+  onOpenChat?: (chamadoId: string) => void;
 }
 
-export const ChamadoDetailsModal: React.FC<ChamadoDetailsModalProps> = ({ chamado, onClose }) => {
+export const ChamadoDetailsModal: React.FC<ChamadoDetailsModalProps> = ({ chamado, onClose, onOpenChat }) => {
   if (!chamado) return null;
 
   return (
@@ -144,7 +145,23 @@ export const ChamadoDetailsModal: React.FC<ChamadoDetailsModalProps> = ({ chamad
         </div>
 
         {/* Footer */}
-        <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex justify-end">
+        <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex items-center justify-between gap-2">
+          {onOpenChat ? (
+            <button
+              id="btn-modal-open-chat"
+              onClick={() => {
+                onClose();
+                onOpenChat(chamado.id);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
+            >
+              <MessageSquare size={14} />
+              <span>Abrir Chat Online com Anexos</span>
+            </button>
+          ) : (
+            <div></div>
+          )}
+
           <button
             onClick={onClose}
             className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-md transition-colors border border-slate-200"

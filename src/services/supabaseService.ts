@@ -1,8 +1,53 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Chamado, ChamadoStatus } from '../types';
+import { Chamado, User, UserProfile } from '../types';
 
 const STORAGE_KEY_CHAMADOS = 'sistema_chamados_dados';
 const STORAGE_KEY_CONFIG = 'sistema_chamados_supabase_config';
+const STORAGE_KEY_USERS = 'sistema_chamados_usuarios_db';
+
+export interface StoredUserAccount {
+  id: string;
+  login: string;
+  nome: string;
+  email?: string;
+  senha?: string;
+  perfil: UserProfile;
+  criadoEm: string;
+  origem?: 'local' | 'google' | 'supabase';
+}
+
+const DEFAULT_USERS: StoredUserAccount[] = [
+  {
+    id: 'usr-operador-01',
+    login: 'operador',
+    nome: 'Carlos Mendes',
+    email: 'operador@empresa.com',
+    senha: 'operador123',
+    perfil: 'Usuário',
+    criadoEm: new Date().toISOString(),
+    origem: 'local'
+  },
+  {
+    id: 'usr-tecnico-01',
+    login: 'tecnico',
+    nome: 'Eduardo (Técnico TI)',
+    email: 'eduardo.tecnico@empresa.com',
+    senha: 'tecnico01',
+    perfil: 'Técnico',
+    criadoEm: new Date().toISOString(),
+    origem: 'local'
+  },
+  {
+    id: 'usr-usuario-01',
+    login: 'usuario',
+    nome: 'Mariana Souza',
+    email: 'mariana.souza@empresa.com',
+    senha: 'usuario123',
+    perfil: 'Usuário',
+    criadoEm: new Date().toISOString(),
+    origem: 'local'
+  }
+];
 
 // Load stored config or env variables
 function getInitialConfig() {
@@ -42,6 +87,33 @@ if (currentConfig.enabled && currentConfig.url && currentConfig.anonKey) {
 }
 
 // Local Storage helpers for fallback persistence
+function getLocalUsers(): StoredUserAccount[] {
+  try {
+    const data = localStorage.getItem(STORAGE_KEY_USERS);
+    if (data) {
+      const parsed: StoredUserAccount[] = JSON.parse(data);
+      // Ensure defaults exist if list is empty
+      if (parsed.length === 0) {
+        saveLocalUsers(DEFAULT_USERS);
+        return DEFAULT_USERS;
+      }
+      return parsed;
+    }
+  } catch (e) {
+    console.error('Erro ao ler usuários do localStorage', e);
+  }
+  saveLocalUsers(DEFAULT_USERS);
+  return DEFAULT_USERS;
+}
+
+function saveLocalUsers(users: StoredUserAccount[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
+  } catch (e) {
+    console.error('Erro ao salvar usuários no localStorage', e);
+  }
+}
+
 function getLocalChamados(): Chamado[] {
   try {
     const data = localStorage.getItem(STORAGE_KEY_CHAMADOS);
@@ -60,7 +132,7 @@ function saveLocalChamados(chamados: Chamado[]): void {
   }
 }
 
-// Generate human-friendly ID like #CH-1001, #CH-1002
+// Generate human-friendly ID like #CH-2601, #CH-2602
 function generateChamadoId(existingChamados: Chamado[]): string {
   const prefix = 'CH-';
   const now = new Date();
@@ -114,6 +186,237 @@ export const SupabaseService = {
     }
   },
 
+  // -------------------------------------------------------------
+  // USER & AUTH SERVICES
+  // -------------------------------------------------------------
+  async getUsers(): Promise<StoredUserAccount[]> {
+    if (supabaseClient && currentConfig.enabled) {
+      try {
+        const { data, error } = await supabaseClient
+          .from('usuarios')
+          .select('*')
+          .order('criado_em', { ascending: false });
+
+        if (!error && data && data.length > 0) {
+          const mapped: StoredUserAccount[] = data.map((u: any) => ({
+            id: u.id,
+            login: u.login,
+            nome: u.nome,
+            email: u.email,
+            senha: u.senha,
+            perfil: (u.perfil === 'Técnico' ? 'Técnico' : 'Usuário') as UserProfile,
+            criadoEm: u.criado_em || new Date().toISOString(),
+            origem: u.origem || 'supabase'
+          }));
+          return mapped;
+        }
+      } catch (err) {
+        console.warn('Erro ao buscar usuários do Supabase, usando local:', err);
+      }
+    }
+    return getLocalUsers();
+  },
+
+  async authenticateUser(loginInput: string, passwordInput: string): Promise<{ success: boolean; user?: User; error?: string }> {
+    const cleanLogin = loginInput.trim().toLowerCase();
+    const users = await this.getUsers();
+
+    const matched = users.find(u => 
+      u.login.toLowerCase() === cleanLogin || 
+      (u.email && u.email.toLowerCase() === cleanLogin)
+    );
+
+    if (!matched) {
+      return {
+        success: false,
+        error: 'Usuário não encontrado. Cadastre-se ou confira as credenciais.'
+      };
+    }
+
+    if (matched.senha && matched.senha !== passwordInput) {
+      return {
+        success: false,
+        error: 'Senha incorreta. Verifique os dados digitados.'
+      };
+    }
+
+    return {
+      success: true,
+      user: {
+        id: matched.id,
+        login: matched.login,
+        nome: matched.nome,
+        email: matched.email,
+        perfil: matched.perfil
+      }
+    };
+  },
+
+  // Public signup: Strictly only creates "Usuário" profile
+  async registerPublicUser(data: { nome: string; login: string; email?: string; senha: string }): Promise<{ success: boolean; user?: User; error?: string }> {
+    const cleanLogin = data.login.trim().toLowerCase();
+    if (!cleanLogin || !data.nome.trim() || !data.senha) {
+      return { success: false, error: 'Preencha todos os campos obrigatórios.' };
+    }
+
+    const currentUsers = getLocalUsers();
+    if (currentUsers.some(u => u.login.toLowerCase() === cleanLogin)) {
+      return { success: false, error: 'Este login já está cadastrado. Escolha outro.' };
+    }
+
+    const newAccount: StoredUserAccount = {
+      id: `usr-${Date.now()}`,
+      login: cleanLogin,
+      nome: data.nome.trim(),
+      email: data.email?.trim() || `${cleanLogin}@empresa.com`,
+      senha: data.senha,
+      perfil: 'Usuário', // Mandated by spec: public registration can only create 'Usuário'
+      criadoEm: new Date().toISOString(),
+      origem: 'local'
+    };
+
+    const updated = [newAccount, ...currentUsers];
+    saveLocalUsers(updated);
+
+    // Try sync to Supabase table 'usuarios' if available
+    if (supabaseClient && currentConfig.enabled) {
+      try {
+        await supabaseClient.from('usuarios').insert([{
+          id: newAccount.id,
+          login: newAccount.login,
+          nome: newAccount.nome,
+          email: newAccount.email,
+          senha: newAccount.senha,
+          perfil: 'Usuário',
+          criado_em: newAccount.criadoEm,
+          origem: 'local'
+        }]);
+      } catch (err) {
+        console.warn('Erro ao sincronizar usuário no Supabase:', err);
+      }
+    }
+
+    return {
+      success: true,
+      user: {
+        id: newAccount.id,
+        login: newAccount.login,
+        nome: newAccount.nome,
+        email: newAccount.email,
+        perfil: newAccount.perfil
+      }
+    };
+  },
+
+  // Technician creation: Allowed for creating other technicians
+  async createTechnician(data: { nome: string; login: string; email?: string; senha: string }): Promise<{ success: boolean; user?: User; error?: string }> {
+    const cleanLogin = data.login.trim().toLowerCase();
+    if (!cleanLogin || !data.nome.trim() || !data.senha) {
+      return { success: false, error: 'Preencha todos os campos obrigatórios.' };
+    }
+
+    const currentUsers = getLocalUsers();
+    if (currentUsers.some(u => u.login.toLowerCase() === cleanLogin)) {
+      return { success: false, error: 'Este login já está em uso.' };
+    }
+
+    const newTechAccount: StoredUserAccount = {
+      id: `tech-${Date.now()}`,
+      login: cleanLogin,
+      nome: data.nome.trim(),
+      email: data.email?.trim() || `${cleanLogin}@suporte.com`,
+      senha: data.senha,
+      perfil: 'Técnico', // Granted technician role
+      criadoEm: new Date().toISOString(),
+      origem: 'local'
+    };
+
+    const updated = [newTechAccount, ...currentUsers];
+    saveLocalUsers(updated);
+
+    if (supabaseClient && currentConfig.enabled) {
+      try {
+        await supabaseClient.from('usuarios').insert([{
+          id: newTechAccount.id,
+          login: newTechAccount.login,
+          nome: newTechAccount.nome,
+          email: newTechAccount.email,
+          senha: newTechAccount.senha,
+          perfil: 'Técnico',
+          criado_em: newTechAccount.criadoEm,
+          origem: 'local'
+        }]);
+      } catch (err) {
+        console.warn('Erro ao inserir técnico no Supabase:', err);
+      }
+    }
+
+    return {
+      success: true,
+      user: {
+        id: newTechAccount.id,
+        login: newTechAccount.login,
+        nome: newTechAccount.nome,
+        email: newTechAccount.email,
+        perfil: newTechAccount.perfil
+      }
+    };
+  },
+
+  // Google Login / Cadastro com Google:
+  async authenticateWithGoogle(googleEmail: string, googleName?: string): Promise<{ success: boolean; user: User }> {
+    const cleanEmail = googleEmail.trim().toLowerCase();
+    const displayName = googleName?.trim() || cleanEmail.split('@')[0];
+    const generatedLogin = cleanEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '');
+
+    const currentUsers = getLocalUsers();
+    let existing = currentUsers.find(u => u.email?.toLowerCase() === cleanEmail || u.login.toLowerCase() === generatedLogin);
+
+    if (!existing) {
+      // Create new Google account with default profile "Usuário"
+      existing = {
+        id: `google-${Date.now()}`,
+        login: generatedLogin || `user_${Date.now().toString().slice(-4)}`,
+        nome: displayName,
+        email: cleanEmail,
+        perfil: 'Usuário', // Default strictly to Usuário
+        criadoEm: new Date().toISOString(),
+        origem: 'google'
+      };
+      saveLocalUsers([existing, ...currentUsers]);
+
+      if (supabaseClient && currentConfig.enabled) {
+        try {
+          await supabaseClient.from('usuarios').insert([{
+            id: existing.id,
+            login: existing.login,
+            nome: existing.nome,
+            email: existing.email,
+            perfil: 'Usuário',
+            criado_em: existing.criadoEm,
+            origem: 'google'
+          }]);
+        } catch (e) {
+          console.warn('Erro ao gravar conta google no Supabase:', e);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      user: {
+        id: existing.id,
+        login: existing.login,
+        nome: existing.nome,
+        email: existing.email,
+        perfil: existing.perfil
+      }
+    };
+  },
+
+  // -------------------------------------------------------------
+  // CHAMADOS SERVICES
+  // -------------------------------------------------------------
   async getChamados(): Promise<Chamado[]> {
     if (supabaseClient && currentConfig.enabled) {
       try {
@@ -289,3 +592,4 @@ export const SupabaseService = {
     }
   }
 };
+

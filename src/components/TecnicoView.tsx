@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Chamado, User } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
+import { CadastrarTecnicoModal } from './CadastrarTecnicoModal';
 import {
   Wrench,
   CheckCircle2,
@@ -10,7 +11,9 @@ import {
   Search,
   AlertCircle,
   Sparkles,
-  Info
+  Info,
+  UserPlus,
+  MessageSquare
 } from 'lucide-react';
 
 interface TecnicoViewProps {
@@ -19,6 +22,7 @@ interface TecnicoViewProps {
   onUpdateStatusEmAtendimento: (id: string, tecnicoNome: string) => Promise<Chamado | null>;
   onEncerrarChamado: (id: string, descricaoServico: string, tecnicoNome: string) => Promise<Chamado | null>;
   onSelectChamado: (chamado: Chamado) => void;
+  onOpenChat?: (chamadoId: string) => void;
   isProcessing?: boolean;
 }
 
@@ -35,6 +39,7 @@ export const TecnicoView: React.FC<TecnicoViewProps> = ({
   chamados,
   onUpdateStatusEmAtendimento,
   onEncerrarChamado,
+  onOpenChat,
   isProcessing = false
 }) => {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(
@@ -45,6 +50,7 @@ export const TecnicoView: React.FC<TecnicoViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [isCadastrarTecnicoOpen, setIsCadastrarTecnicoOpen] = useState(false);
 
   const selectedTicket = chamados.find(c => c.id === selectedTicketId) || chamados[0] || null;
 
@@ -108,35 +114,54 @@ export const TecnicoView: React.FC<TecnicoViewProps> = ({
     <div className="space-y-6">
       
       {/* Top Banner & Filter Summary */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
-            <span>Fila de Chamados</span>
-            <span className="bg-slate-200 text-slate-600 text-xs font-bold px-2.5 py-0.5 rounded-full">
-              {totalAtivos} Ativos
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
+              Painel do Técnico
             </span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+            <h2 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
+              <span>Fila de Chamados</span>
+              <span className="bg-slate-200 text-slate-600 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                {totalAtivos} Ativos
+              </span>
+            </h2>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
             Selecione um chamado da fila para iniciar o atendimento ou emitir o laudo técnico de encerramento.
           </p>
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex flex-wrap items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-xs">
-          {(['Todos', 'Aberto', 'Em Atendimento', 'Encerrado'] as const).map((st) => (
-            <button
-              key={st}
-              id={`filter-tecnico-${st.toLowerCase().replace(' ', '-')}`}
-              onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-                statusFilter === st
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {st}
-            </button>
-          ))}
+        {/* Action button to create new technicians & Filter Pills */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Button to open technician registration modal */}
+          <button
+            id="btn-open-cadastrar-tecnico"
+            type="button"
+            onClick={() => setIsCadastrarTecnicoOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 shadow-xs transition-colors"
+          >
+            <UserPlus size={14} />
+            <span>Cadastrar Novo Técnico</span>
+          </button>
+
+          {/* Filter Pills */}
+          <div className="flex flex-wrap items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-xs">
+            {(['Todos', 'Aberto', 'Em Atendimento', 'Encerrado'] as const).map((st) => (
+              <button
+                key={st}
+                id={`filter-tecnico-${st.toLowerCase().replace(' ', '-')}`}
+                onClick={() => setStatusFilter(st)}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                  statusFilter === st
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -171,7 +196,7 @@ export const TecnicoView: React.FC<TecnicoViewProps> = ({
                 <h4 className="text-sm font-bold text-slate-700">Nenhum chamado encontrado</h4>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
                   {chamados.length === 0
-                    ? 'Ainda não há chamados registrados. Acesse como Operador para abrir o primeiro chamado.'
+                    ? 'Ainda não há chamados registrados. Acesse com o perfil Usuário para abrir o primeiro chamado.'
                     : 'Nenhum chamado corresponde aos filtros atuais.'}
                 </p>
               </div>
@@ -185,6 +210,7 @@ export const TecnicoView: React.FC<TecnicoViewProps> = ({
                       <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Título</th>
                       <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Status</th>
                       <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Prioridade</th>
+                      <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-right">Chat</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -215,6 +241,19 @@ export const TecnicoView: React.FC<TecnicoViewProps> = ({
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <PriorityBadge prioridade={chamado.prioridade} />
+                          </td>
+                          <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            {onOpenChat && (
+                              <button
+                                id={`btn-tecnico-chat-row-${chamado.id}`}
+                                onClick={() => onOpenChat(chamado.id)}
+                                title="Abrir chat online com o solicitante"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-md border border-indigo-200 transition-colors"
+                              >
+                                <MessageSquare size={13} />
+                                <span className="hidden xl:inline">Chat</span>
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );
@@ -255,6 +294,31 @@ export const TecnicoView: React.FC<TecnicoViewProps> = ({
               {/* Body */}
               <div className="p-5 flex-1 flex flex-col gap-4 bg-white">
                 
+                {/* Chat Online Action Banner */}
+                {onOpenChat && (
+                  <div className="p-3 bg-indigo-50/80 border border-indigo-200 rounded-lg flex items-center justify-between gap-2 text-xs text-indigo-900">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-md bg-indigo-600 text-white shrink-0">
+                        <MessageSquare size={15} />
+                      </div>
+                      <div>
+                        <span className="font-bold block">Chat Online com Solicitante</span>
+                        <span className="text-[11px] text-indigo-700">Tire dúvidas e solicite prints ou fotos</span>
+                      </div>
+                    </div>
+
+                    <button
+                      id="btn-tecnico-card-open-chat"
+                      type="button"
+                      onClick={() => onOpenChat(selectedTicket.id)}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold rounded-md transition-colors shadow-2xs shrink-0 flex items-center gap-1.5"
+                    >
+                      <MessageSquare size={13} />
+                      <span>Abrir Chat</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* Alerts */}
                 {actionSuccess && (
                   <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-xs flex items-center gap-2">
@@ -423,6 +487,16 @@ export const TecnicoView: React.FC<TecnicoViewProps> = ({
 
       </div>
 
+      {/* Cadastrar Técnico Modal */}
+      <CadastrarTecnicoModal
+        isOpen={isCadastrarTecnicoOpen}
+        onClose={() => setIsCadastrarTecnicoOpen(false)}
+        onCreated={(newTecnico) => {
+          setActionSuccess(`Novo técnico "${newTecnico.nome}" cadastrado com sucesso!`);
+        }}
+      />
+
     </div>
   );
 };
+

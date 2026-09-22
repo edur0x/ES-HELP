@@ -1,13 +1,13 @@
 import React from 'react';
 import { User } from '../types';
-import { LogOut, UserCheck, ShieldCheck, Database, BookOpen, Laptop, RefreshCw } from 'lucide-react';
+import { LogOut, UserCheck, ShieldCheck, Database, Laptop, RefreshCw, MessageSquare } from 'lucide-react';
 
 interface HeaderProps {
   user: User;
   onLogout: () => void;
-  onOpenGuide: () => void;
   onOpenSupabaseConfig: () => void;
   onRefresh: () => void;
+  onOpenChat?: () => void;
   isRefreshing?: boolean;
   isSupabaseActive?: boolean;
 }
@@ -15,9 +15,9 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   user,
   onLogout,
-  onOpenGuide,
   onOpenSupabaseConfig,
   onRefresh,
+  onOpenChat,
   isRefreshing = false,
   isSupabaseActive = false
 }) => {
@@ -36,8 +36,8 @@ export const Header: React.FC<HeaderProps> = ({
                 <h1 className="text-lg font-bold tracking-tight text-white">
                   HelpDesk TI
                 </h1>
-                <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-medium border border-blue-500/30">
-                  Didático
+                <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-medium border border-emerald-500/30">
+                  Produção
                 </span>
               </div>
               <p className="text-xs text-slate-400">
@@ -60,21 +60,21 @@ export const Header: React.FC<HeaderProps> = ({
 
               <div className="flex items-center gap-1.5">
                 <span className="text-slate-400 text-xs hidden sm:inline">Perfil:</span>
-                {user.perfil === 'Operador' ? (
-                  <span
-                    id="user-profile-badge"
-                    className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                  >
-                    <UserCheck size={12} />
-                    Operador
-                  </span>
-                ) : (
+                {user.perfil === 'Técnico' ? (
                   <span
                     id="user-profile-badge"
                     className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
                   >
                     <ShieldCheck size={12} />
                     Técnico
+                  </span>
+                ) : (
+                  <span
+                    id="user-profile-badge"
+                    className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                  >
+                    <UserCheck size={12} />
+                    {user.perfil === 'Operador' ? 'Operador' : 'Usuário'}
                   </span>
                 )}
               </div>
@@ -92,16 +92,19 @@ export const Header: React.FC<HeaderProps> = ({
                 <RefreshCw size={16} className={isRefreshing ? 'animate-spin text-blue-400' : ''} />
               </button>
 
-              {/* Didactic guide */}
-              <button
-                id="btn-open-guide"
-                onClick={onOpenGuide}
-                title="Ver roteiro didático de 10 passos"
-                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700 transition-colors"
-              >
-                <BookOpen size={14} className="text-blue-400" />
-                <span className="hidden md:inline">Roteiro Didático</span>
-              </button>
+              {/* Chat Online with Client/Support */}
+              {onOpenChat && (
+                <button
+                  id="btn-header-open-chat"
+                  onClick={onOpenChat}
+                  title="Abrir Chat Online com envio de anexos"
+                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-indigo-600/25 text-indigo-200 hover:text-white hover:bg-indigo-600 border border-indigo-500/40 transition-colors shadow-2xs"
+                >
+                  <MessageSquare size={14} className="text-indigo-400" />
+                  <span className="hidden sm:inline font-semibold">Chat Online</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                </button>
+              )}
 
               {/* Supabase Status / Config */}
               <button

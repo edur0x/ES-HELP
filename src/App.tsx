@@ -7,7 +7,8 @@ import { OperadorView } from './components/OperadorView';
 import { TecnicoView } from './components/TecnicoView';
 import { ChamadoDetailsModal } from './components/ChamadoDetailsModal';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
-import { DidacticGuideModal } from './components/DidacticGuideModal';
+import { OnlineChatModal } from './components/OnlineChatModal';
+import { ChatFloatingLauncher } from './components/ChatFloatingLauncher';
 
 const STORAGE_KEY_AUTH = 'sistema_chamados_auth_user';
 
@@ -28,8 +29,15 @@ export default function App() {
 
   // Modals state
   const [selectedChamadoForDetails, setSelectedChamadoForDetails] = useState<Chamado | null>(null);
-  const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
+  const [activeChatChamadoId, setActiveChatChamadoId] = useState<string>('geral');
+
+  // Handle opening chat
+  const handleOpenChat = (chamadoId?: string) => {
+    setActiveChatChamadoId(chamadoId || 'geral');
+    setIsChatOpen(true);
+  };
 
   // Check Supabase connection state
   const supabaseCfg = SupabaseService.getConfig();
@@ -69,22 +77,6 @@ export default function App() {
       localStorage.removeItem(STORAGE_KEY_AUTH);
     } catch (e) {
       console.error('Erro ao limpar sessão', e);
-    }
-  };
-
-  const handleQuickSwitchRole = (role: 'operador' | 'tecnico') => {
-    if (role === 'operador') {
-      handleLogin({
-        login: 'operador',
-        nome: 'Carlos Mendes (Operador)',
-        perfil: 'Operador'
-      });
-    } else {
-      handleLogin({
-        login: 'tecnico',
-        nome: 'Rafael Silva (Técnico TI)',
-        perfil: 'Técnico'
-      });
     }
   };
 
@@ -136,7 +128,6 @@ export default function App() {
       {!currentUser ? (
         <LoginScreen
           onLogin={handleLogin}
-          onOpenGuide={() => setIsGuideOpen(true)}
         />
       ) : (
         <>
@@ -144,14 +135,14 @@ export default function App() {
           <Header
             user={currentUser}
             onLogout={handleLogout}
-            onOpenGuide={() => setIsGuideOpen(true)}
             onOpenSupabaseConfig={() => setIsSupabaseModalOpen(true)}
             onRefresh={() => fetchChamados(true)}
+            onOpenChat={() => handleOpenChat('geral')}
             isRefreshing={isRefreshing}
             isSupabaseActive={isSupabaseActive}
           />
 
-          {/* Main View Container */}
+          {/* Main View Container: strictly isolated based on logged-in user profile */}
           <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-20">
@@ -160,11 +151,13 @@ export default function App() {
                   Carregando chamados...
                 </p>
               </div>
-            ) : currentUser.perfil === 'Operador' ? (
+            ) : currentUser.perfil === 'Operador' || currentUser.perfil === 'Usuário' ? (
               <OperadorView
+                currentUser={currentUser}
                 chamados={chamados}
                 onCreateChamado={handleCreateChamado}
                 onSelectChamado={(ch) => setSelectedChamadoForDetails(ch)}
+                onOpenChat={handleOpenChat}
                 isSubmitting={isSubmitting}
               />
             ) : (
@@ -174,10 +167,17 @@ export default function App() {
                 onUpdateStatusEmAtendimento={handleUpdateStatusEmAtendimento}
                 onEncerrarChamado={handleEncerrarChamado}
                 onSelectChamado={(ch) => setSelectedChamadoForDetails(ch)}
+                onOpenChat={handleOpenChat}
                 isProcessing={isSubmitting}
               />
             )}
           </main>
+
+          {/* Floating Online Chat Launcher */}
+          <ChatFloatingLauncher
+            currentUser={currentUser}
+            onOpenChat={handleOpenChat}
+          />
         </>
       )}
 
@@ -185,21 +185,25 @@ export default function App() {
       <ChamadoDetailsModal
         chamado={selectedChamadoForDetails}
         onClose={() => setSelectedChamadoForDetails(null)}
+        onOpenChat={handleOpenChat}
       />
+
+      {/* Online Chat Modal with Attachment Support */}
+      {currentUser && (
+        <OnlineChatModal
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+          currentUser={currentUser}
+          chamados={chamados}
+          initialChamadoId={activeChatChamadoId}
+        />
+      )}
 
       {/* Supabase Connection & SQL DDL Modal */}
       <SupabaseConfigModal
         isOpen={isSupabaseModalOpen}
         onClose={() => setIsSupabaseModalOpen(false)}
         onRefreshData={() => fetchChamados()}
-      />
-
-      {/* Interactive Didactic Flow 10-Step Guide */}
-      <DidacticGuideModal
-        isOpen={isGuideOpen}
-        onClose={() => setIsGuideOpen(false)}
-        currentUserProfile={currentUser?.perfil}
-        onQuickSwitchRole={handleQuickSwitchRole}
       />
 
     </div>

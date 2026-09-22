@@ -1,9 +1,12 @@
-export type UserProfile = 'Operador' | 'Técnico';
+export type UserProfile = 'Usuário' | 'Operador' | 'Técnico';
 
 export interface User {
+  id?: string;
   login: string;
   nome: string;
+  email?: string;
   perfil: UserProfile;
+  criadoEm?: string;
 }
 
 export type ChamadoStatus = 'Aberto' | 'Em Atendimento' | 'Encerrado';
@@ -48,3 +51,25 @@ export interface SupabaseConfig {
   isConnected: boolean;
   useLiveSupabase: boolean;
 }
+
+export interface ChatAttachment {
+  id: string;
+  nome: string;
+  tipo: string; // MIME type e.g. 'image/png', 'application/pdf'
+  tamanho: number; // bytes
+  url: string; // Base64 data URL
+  extensao?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  chamadoId: string; // Protocolo do chamado (ex: 'CH-2601') ou 'geral'
+  senderId: string;
+  senderName: string;
+  senderPerfil: UserProfile;
+  mensagem: string;
+  criadoEm: string; // ISO date string
+  anexo?: ChatAttachment | null;
+  lida?: boolean;
+}
+

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Chamado, TipoSolicitacao, CategoriaChamado, ChamadoPrioridade } from '../types';
+import { Chamado, TipoSolicitacao, CategoriaChamado, ChamadoPrioridade, User } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import {
@@ -17,10 +17,12 @@ import {
   Tag,
   AlertTriangle,
   Layers,
-  Calendar
+  Calendar,
+  MessageSquare
 } from 'lucide-react';
 
 interface OperadorViewProps {
+  currentUser?: User;
   chamados: Chamado[];
   onCreateChamado: (payload: {
     solicitante: string;
@@ -32,6 +34,7 @@ interface OperadorViewProps {
     descricao_problema: string;
   }) => Promise<Chamado>;
   onSelectChamado: (chamado: Chamado) => void;
+  onOpenChat?: (chamadoId: string) => void;
   isSubmitting?: boolean;
 }
 
@@ -100,15 +103,17 @@ const QUICK_TEMPLATES = [
 ];
 
 export const OperadorView: React.FC<OperadorViewProps> = ({
+  currentUser,
   chamados,
   onCreateChamado,
   onSelectChamado,
+  onOpenChat,
   isSubmitting = false
 }) => {
   const [activeTab, setActiveTab] = useState<'abrir' | 'listar'>('abrir');
 
-  // Form states
-  const [solicitante, setSolicitante] = useState('');
+  // Form states - pre-fill solicitante with logged in user if available
+  const [solicitante, setSolicitante] = useState(currentUser?.nome || '');
   const [tipoSolicitacao, setTipoSolicitacao] = useState<string>(TIPOS_SOLICITACAO[0]);
   const [categoria, setCategoria] = useState<string>(CATEGORIAS[0]);
   const [prioridade, setPrioridade] = useState<ChamadoPrioridade>('Média');
@@ -126,6 +131,13 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
   // Search & filter in list
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'Todos' | 'Aberto' | 'Em Atendimento' | 'Encerrado'>('Todos');
+  const [scopeFilter, setScopeFilter] = useState<'meus' | 'todos'>('meus');
+
+  useEffect(() => {
+    if (currentUser?.nome && !solicitante) {
+      setSolicitante(currentUser.nome);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     const updateTime = () => {
@@ -145,7 +157,7 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
   }, []);
 
   const handleApplyTemplate = (tmpl: typeof QUICK_TEMPLATES[0]) => {
-    setSolicitante(tmpl.solicitante);
+    setSolicitante(currentUser?.nome || tmpl.solicitante);
     setTipoSolicitacao(tmpl.tipo);
     setCategoria(tmpl.categoria);
     setPrioridade(tmpl.prioridade);
@@ -156,7 +168,7 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
   };
 
   const handleClearForm = () => {
-    setSolicitante('');
+    setSolicitante(currentUser?.nome || '');
     setTipoSolicitacao(TIPOS_SOLICITACAO[0]);
     setCategoria(CATEGORIAS[0]);
     setPrioridade('Média');
@@ -201,6 +213,18 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
     }
   };
 
+  const isMine = (ch: Chamado) => {
+    if (!currentUser) return true;
+    const userName = (currentUser.nome || '').toLowerCase().trim();
+    const userLogin = (currentUser.login || '').toLowerCase().trim();
+    const solicitanteName = (ch.solicitante || '').toLowerCase().trim();
+    if (!userName && !userLogin) return true;
+    return (
+      (userName && solicitanteName.includes(userName)) ||
+      (userLogin && solicitanteName.includes(userLogin))
+    );
+  };
+
   const filteredChamados = chamados.filter((ch) => {
     const matchesSearch =
       ch.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -209,10 +233,12 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
       ch.categoria.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'Todos' || ch.status === statusFilter;
+    const matchesScope = scopeFilter === 'todos' || isMine(ch);
 
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && matchesScope;
   });
 
+  const totalMeusChamados = chamados.filter(isMine).length;
   const totalAbertos = chamados.filter(c => c.status === 'Aberto').length;
   const totalEmAtendimento = chamados.filter(c => c.status === 'Em Atendimento').length;
   const totalEncerrados = chamados.filter(c => c.status === 'Encerrado').length;
@@ -225,15 +251,15 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
-                Painel do Operador
+              <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+                Área do Usuário
               </span>
               <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
                 Abertura e Acompanhamento de Chamados
               </h2>
             </div>
             <p className="text-sm text-slate-500 mt-1">
-              Registre incidentes e requisições de usuários para atendimento pela equipe técnica.
+              Abra novas solicitações de suporte e acompanhe o status dos seus atendimentos em tempo real.
             </p>
           </div>
 
@@ -305,7 +331,7 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
                 <h4 className="font-bold text-green-900 text-sm sm:text-base">
                   Chamado {lastCreatedTicket.id} aberto com sucesso!
                 </h4>
-                <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase bg-green-200 text-green-800">
+                <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase bg-blue-100 text-blue-800">
                   Status: Aberto
                 </span>
               </div>
@@ -319,6 +345,18 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {onOpenChat && (
+              <button
+                id="btn-created-ticket-chat"
+                onClick={() => {
+                  onOpenChat(lastCreatedTicket.id);
+                }}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md transition-colors shadow-xs inline-flex items-center gap-1.5"
+              >
+                <MessageSquare size={13} />
+                <span>Conversar no Chat</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 onSelectChamado(lastCreatedTicket);
@@ -376,12 +414,12 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
             </div>
           </div>
 
-          {/* Quick Demo Fill Buttons */}
+          {/* Quick Frequent Templates */}
           <div className="bg-indigo-50/40 border-b border-indigo-100 px-6 py-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-900">
                 <Sparkles size={14} className="text-indigo-600" />
-                <span>Exemplos Didáticos Rápidos (1-clique para preencher):</span>
+                <span>Modelos Frequentes de Solicitação (Preenchimento Rápido):</span>
               </div>
             </div>
             <div className="flex flex-wrap gap-2 mt-2">
@@ -599,39 +637,77 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
         <div className="bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden flex flex-col">
           
           {/* Filter and Search Bar */}
-          <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex flex-col gap-3">
             
-            {/* Search Input */}
-            <div className="relative flex-1 max-w-md">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                <Search size={15} />
-              </div>
-              <input
-                id="input-search-operador"
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por protocolo, solicitante ou título..."
-                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-              />
-            </div>
-
-            {/* Status Filter Buttons */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              {(['Todos', 'Aberto', 'Em Atendimento', 'Encerrado'] as const).map((st) => (
+            {/* Scope tabs: Meus Chamados vs Todos */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
+              <div className="flex items-center p-1 bg-slate-200/70 rounded-lg border border-slate-300/60 shrink-0">
                 <button
-                  key={st}
-                  id={`filter-operador-${st.toLowerCase().replace(' ', '-')}`}
-                  onClick={() => setStatusFilter(st)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
-                    statusFilter === st
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  id="tab-scope-meus"
+                  type="button"
+                  onClick={() => setScopeFilter('meus')}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                    scopeFilter === 'meus'
+                      ? 'bg-white text-indigo-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  {st}
+                  Meus Chamados ({totalMeusChamados})
                 </button>
-              ))}
+                <button
+                  id="tab-scope-todos"
+                  type="button"
+                  onClick={() => setScopeFilter('todos')}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                    scopeFilter === 'todos'
+                      ? 'bg-white text-indigo-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Todos os Chamados ({chamados.length})
+                </button>
+              </div>
+
+              {scopeFilter === 'meus' && (
+                <span className="text-xs text-slate-500">
+                  Exibindo chamados vinculados a <strong className="text-slate-700">{currentUser?.nome || 'sua conta'}</strong>
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              {/* Search Input */}
+              <div className="relative flex-1 max-w-md">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <Search size={15} />
+                </div>
+                <input
+                  id="input-search-operador"
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar por protocolo, solicitante ou título..."
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                />
+              </div>
+
+              {/* Status Filter Buttons */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(['Todos', 'Aberto', 'Em Atendimento', 'Encerrado'] as const).map((st) => (
+                  <button
+                    key={st}
+                    id={`filter-operador-${st.toLowerCase().replace(' ', '-')}`}
+                    onClick={() => setStatusFilter(st)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                      statusFilter === st
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -693,14 +769,27 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
                         <PriorityBadge prioridade={chamado.prioridade} />
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <button
-                          id={`btn-view-chamado-${chamado.id}`}
-                          onClick={() => onSelectChamado(chamado)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md transition-colors border border-slate-200"
-                        >
-                          <Eye size={13} />
-                          <span>Detalhes</span>
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {onOpenChat && (
+                            <button
+                              id={`btn-chat-chamado-${chamado.id}`}
+                              onClick={() => onOpenChat(chamado.id)}
+                              title="Abrir chat online deste chamado"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-md transition-colors border border-indigo-200"
+                            >
+                              <MessageSquare size={13} />
+                              <span className="hidden sm:inline">Chat</span>
+                            </button>
+                          )}
+                          <button
+                            id={`btn-view-chamado-${chamado.id}`}
+                            onClick={() => onSelectChamado(chamado)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md transition-colors border border-slate-200"
+                          >
+                            <Eye size={13} />
+                            <span>Detalhes</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -715,3 +804,4 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
     </div>
   );
 };
+
