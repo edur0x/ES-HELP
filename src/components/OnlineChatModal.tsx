@@ -28,6 +28,7 @@ interface OnlineChatModalProps {
   currentUser: User;
   chamados: Chamado[];
   selectedChamadoId?: string; // Optional pre-selected ticket ID or 'geral'
+  initialChamadoId?: string;
   onSelectChamadoId?: (id: string) => void;
 }
 
@@ -36,10 +37,12 @@ export const OnlineChatModal: React.FC<OnlineChatModalProps> = ({
   onClose,
   currentUser,
   chamados,
-  selectedChamadoId = 'geral',
+  selectedChamadoId,
+  initialChamadoId,
   onSelectChamadoId
 }) => {
-  const [activeChamadoId, setActiveChamadoId] = useState<string>(selectedChamadoId);
+  const defaultTargetId = initialChamadoId || selectedChamadoId || 'geral';
+  const [activeChamadoId, setActiveChamadoId] = useState<string>(defaultTargetId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);

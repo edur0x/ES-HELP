@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Chamado, TipoSolicitacao, CategoriaChamado, ChamadoPrioridade, User } from '../types';
+import { Chamado, ChamadoPrioridade, User, ModeloFrequente } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
+import { ConfigOpcoesService } from '../services/configOpcoesService';
 import {
   PlusCircle,
   List,
@@ -18,11 +19,16 @@ import {
   AlertTriangle,
   Layers,
   Calendar,
-  MessageSquare
+  MessageSquare,
+  Plus,
+  Trash2,
+  X,
+  Zap,
+  Bookmark
 } from 'lucide-react';
 
 interface OperadorViewProps {
-  currentUser?: User;
+  currentUser: User;
   chamados: Chamado[];
   onCreateChamado: (payload: {
     solicitante: string;
@@ -38,69 +44,7 @@ interface OperadorViewProps {
   isSubmitting?: boolean;
 }
 
-const TIPOS_SOLICITACAO: TipoSolicitacao[] = [
-  'Incidente (Falha / Erro)',
-  'Requisição de Serviço',
-  'Dúvida / Orientação',
-  'Acesso / Permissões',
-  'Instalação / Configuração'
-];
-
-const CATEGORIAS: CategoriaChamado[] = [
-  'Hardware (Computadores/Monitores)',
-  'Software / Aplicativos',
-  'Rede / Internet / Wi-Fi',
-  'E-mail / Contas de Acesso',
-  'Impressoras & Periféricos',
-  'Telefonia / Comunicação',
-  'Outros'
-];
-
 const PRIORIDADES: ChamadoPrioridade[] = ['Baixa', 'Média', 'Alta', 'Crítica'];
-
-// Quick templates for fast, realistic live demonstration
-const QUICK_TEMPLATES = [
-  {
-    label: '🖨️ Impressora Travada',
-    solicitante: 'Mariana Souza (Recursos Humanos)',
-    tipo: 'Incidente (Falha / Erro)',
-    categoria: 'Impressoras & Periféricos',
-    prioridade: 'Média' as ChamadoPrioridade,
-    equipamento: 'Impressora HP LaserJet Pro - Sala RH 204',
-    titulo: 'Impressora não puxa papel e apresenta luz vermelha piscando',
-    descricao: 'A impressora do setor de RH travou durante a impressão da folha de ponto. O display acusa erro de alimentação de papel, porém a bandeja está cheia.'
-  },
-  {
-    label: '🌐 Sem Acesso à Internet',
-    solicitante: 'Carlos Eduardo (Contabilidade)',
-    tipo: 'Incidente (Falha / Erro)',
-    categoria: 'Rede / Internet / Wi-Fi',
-    prioridade: 'Alta' as ChamadoPrioridade,
-    equipamento: 'Desktop Dell OptiPlex #14',
-    titulo: 'Computador sem conexão de rede e acesso ao sistema ERP',
-    descricao: 'O computador da mesa 03 perdeu conexão com a rede cabeada após o almoço. O ícone de rede exibe triângulo amarelo de conectividade limitada.'
-  },
-  {
-    label: '💻 Notebook Lento / Travando',
-    solicitante: 'Fernanda Lima (Gerência Comercial)',
-    tipo: 'Incidente (Falha / Erro)',
-    categoria: 'Hardware (Computadores/Monitores)',
-    prioridade: 'Crítica' as ChamadoPrioridade,
-    equipamento: 'Notebook Lenovo ThinkPad T14',
-    titulo: 'Notebook reiniciando sozinho com tela azul frequente',
-    descricao: 'Durante apresentações para clientes, o notebook apresentou 3 telas azuis (BSOD) em sequência com superaquecimento na ventoinha.'
-  },
-  {
-    label: '🔑 Solicitação de Acesso VPN',
-    solicitante: 'Lucas Martins (Auditoria)',
-    tipo: 'Acesso / Permissões',
-    categoria: 'E-mail / Contas de Acesso',
-    prioridade: 'Baixa' as ChamadoPrioridade,
-    equipamento: 'Notebook Corporativo #08',
-    titulo: 'Liberação de usuário para VPN de trabalho remoto',
-    descricao: 'Solicito a criação e envio do token de acesso seguro VPN para viagens corporativas agendadas para a próxima semana.'
-  }
-];
 
 export const OperadorView: React.FC<OperadorViewProps> = ({
   currentUser,
@@ -110,698 +54,878 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
   onOpenChat,
   isSubmitting = false
 }) => {
-  const [activeTab, setActiveTab] = useState<'abrir' | 'listar'>('abrir');
+  // Dynamic options loaded from ConfigOpcoesService
+  const [tiposSolicitacao, setTiposSolicitacao] = useState<string[]>([]);
+  const [categorias, setCategorias] = useState<string[]>([]);
+  const [modelosFrequentes, setModelosFrequentes] = useState<ModeloFrequente[]>([]);
 
-  // Form states - pre-fill solicitante with logged in user if available
-  const [solicitante, setSolicitante] = useState(currentUser?.nome || '');
-  const [tipoSolicitacao, setTipoSolicitacao] = useState<string>(TIPOS_SOLICITACAO[0]);
-  const [categoria, setCategoria] = useState<string>(CATEGORIAS[0]);
+  // Form states
+  const [solicitante, setSolicitante] = useState(currentUser?.nome || currentUser?.login || '');
+  const [tipoSolicitacao, setTipoSolicitacao] = useState<string>('');
+  const [categoria, setCategoria] = useState<string>('');
   const [prioridade, setPrioridade] = useState<ChamadoPrioridade>('Média');
   const [equipamento, setEquipamento] = useState('');
   const [titulo, setTitulo] = useState('');
   const [descricaoProblema, setDescricaoProblema] = useState('');
 
-  // Live time for preview
-  const [currentTime, setCurrentTime] = useState<string>('');
+  // Modals for adding/deleting dynamic options
+  const [isAddTipoModalOpen, setIsAddTipoModalOpen] = useState(false);
+  const [novoTipoInput, setNovoTipoInput] = useState('');
+  
+  const [isAddCategoriaModalOpen, setIsAddCategoriaModalOpen] = useState(false);
+  const [novaCategoriaInput, setNovaCategoriaInput] = useState('');
 
-  // UI state
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [lastCreatedTicket, setLastCreatedTicket] = useState<Chamado | null>(null);
+  const [isAddModeloModalOpen, setIsAddModeloModalOpen] = useState(false);
+  const [novoModeloTitulo, setNovoModeloTitulo] = useState('');
+  const [novoModeloTipo, setNovoModeloTipo] = useState('');
+  const [novoModeloCategoria, setNovoModeloCategoria] = useState('');
+  const [novoModeloPrioridade, setNovoModeloPrioridade] = useState<ChamadoPrioridade>('Média');
+  const [novoModeloDescricao, setNovoModeloDescricao] = useState('');
+  const [novoModeloEquipamento, setNovoModeloEquipamento] = useState('');
 
-  // Search & filter in list
+  // Feedback states
+  const [successChamado, setSuccessChamado] = useState<Chamado | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [optionActionMsg, setOptionActionMsg] = useState<string | null>(null);
+
+  // Search & filter for ticket list
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'Todos' | 'Aberto' | 'Em Atendimento' | 'Encerrado'>('Todos');
-  const [scopeFilter, setScopeFilter] = useState<'meus' | 'todos'>('meus');
+
+  // Load dynamic options
+  const carregarOpcoes = () => {
+    const tipos = ConfigOpcoesService.getTipos();
+    const cats = ConfigOpcoesService.getCategorias();
+    const mods = ConfigOpcoesService.getModelos();
+
+    setTiposSolicitacao(tipos);
+    setCategorias(cats);
+    setModelosFrequentes(mods);
+
+    if (tipos.length > 0 && !tipoSolicitacao) setTipoSolicitacao(tipos[0]);
+    if (cats.length > 0 && !categoria) setCategoria(cats[0]);
+  };
 
   useEffect(() => {
-    if (currentUser?.nome && !solicitante) {
+    carregarOpcoes();
+  }, []);
+
+  // Update solicitante if currentUser changes
+  useEffect(() => {
+    if (currentUser?.nome) {
       setSolicitante(currentUser.nome);
     }
   }, [currentUser]);
 
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setCurrentTime(now.toLocaleString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      }));
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleApplyTemplate = (tmpl: typeof QUICK_TEMPLATES[0]) => {
-    setSolicitante(currentUser?.nome || tmpl.solicitante);
-    setTipoSolicitacao(tmpl.tipo);
-    setCategoria(tmpl.categoria);
-    setPrioridade(tmpl.prioridade);
-    setEquipamento(tmpl.equipamento);
-    setTitulo(tmpl.titulo);
-    setDescricaoProblema(tmpl.descricao);
-    setValidationError(null);
+  // Handle adding new Tipo de Solicitação
+  const handleAddTipo = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!novoTipoInput.trim()) return;
+    const res = ConfigOpcoesService.addTipo(novoTipoInput.trim());
+    if (res.success) {
+      setTiposSolicitacao(res.list);
+      setTipoSolicitacao(novoTipoInput.trim());
+      setNovoTipoInput('');
+      setIsAddTipoModalOpen(false);
+      setOptionActionMsg(`Tipo de solicitação adicionado com sucesso!`);
+      setTimeout(() => setOptionActionMsg(null), 3000);
+    } else {
+      setErrorMsg(res.error || 'Erro ao adicionar tipo.');
+    }
   };
 
-  const handleClearForm = () => {
-    setSolicitante(currentUser?.nome || '');
-    setTipoSolicitacao(TIPOS_SOLICITACAO[0]);
-    setCategoria(CATEGORIAS[0]);
-    setPrioridade('Média');
-    setEquipamento('');
-    setTitulo('');
-    setDescricaoProblema('');
-    setValidationError(null);
+  // Handle deleting current Tipo de Solicitação
+  const handleDeleteCurrentTipo = () => {
+    if (!tipoSolicitacao) return;
+    if (!window.confirm(`Deseja realmente excluir o tipo de solicitação "${tipoSolicitacao}"?`)) return;
+    const res = ConfigOpcoesService.deleteTipo(tipoSolicitacao);
+    if (res.success) {
+      setTiposSolicitacao(res.list);
+      setTipoSolicitacao(res.list[0] || '');
+      setOptionActionMsg(`Tipo removido.`);
+      setTimeout(() => setOptionActionMsg(null), 3000);
+    } else {
+      setErrorMsg(res.error || 'Não foi possível excluir.');
+    }
   };
 
+  // Handle adding new Categoria
+  const handleAddCategoria = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!novaCategoriaInput.trim()) return;
+    const res = ConfigOpcoesService.addCategoria(novaCategoriaInput.trim());
+    if (res.success) {
+      setCategorias(res.list);
+      setCategoria(novaCategoriaInput.trim());
+      setNovaCategoriaInput('');
+      setIsAddCategoriaModalOpen(false);
+      setOptionActionMsg(`Categoria adicionada com sucesso!`);
+      setTimeout(() => setOptionActionMsg(null), 3000);
+    } else {
+      setErrorMsg(res.error || 'Erro ao adicionar categoria.');
+    }
+  };
+
+  // Handle deleting current Categoria
+  const handleDeleteCurrentCategoria = () => {
+    if (!categoria) return;
+    if (!window.confirm(`Deseja realmente excluir a categoria "${categoria}"?`)) return;
+    const res = ConfigOpcoesService.deleteCategoria(categoria);
+    if (res.success) {
+      setCategorias(res.list);
+      setCategoria(res.list[0] || '');
+      setOptionActionMsg(`Categoria removida.`);
+      setTimeout(() => setOptionActionMsg(null), 3000);
+    } else {
+      setErrorMsg(res.error || 'Não foi possível excluir.');
+    }
+  };
+
+  // Handle adding new Modelo Frequente
+  const handleAddModelo = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!novoModeloTitulo.trim() || !novoModeloDescricao.trim()) return;
+    const res = ConfigOpcoesService.addModelo({
+      titulo: novoModeloTitulo.trim(),
+      tipo_solicitacao: novoModeloTipo || tiposSolicitacao[0],
+      categoria: novoModeloCategoria || categorias[0],
+      prioridade: novoModeloPrioridade,
+      equipamento_sugerido: novoModeloEquipamento.trim() || undefined,
+      descricao_padrao: novoModeloDescricao.trim()
+    });
+
+    if (res.success) {
+      setModelosFrequentes(res.list);
+      setNovoModeloTitulo('');
+      setNovoModeloDescricao('');
+      setNovoModeloEquipamento('');
+      setIsAddModeloModalOpen(false);
+      setOptionActionMsg(`Modelo frequente cadastrado com sucesso!`);
+      setTimeout(() => setOptionActionMsg(null), 3000);
+    } else {
+      setErrorMsg(res.error || 'Erro ao adicionar modelo.');
+    }
+  };
+
+  // Handle deleting a Modelo Frequente
+  const handleDeleteModelo = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm('Deseja excluir este modelo frequente de solicitação?')) return;
+    const res = ConfigOpcoesService.deleteModelo(id);
+    if (res.success) {
+      setModelosFrequentes(res.list);
+      setOptionActionMsg(`Modelo frequente removido.`);
+      setTimeout(() => setOptionActionMsg(null), 3000);
+    } else {
+      setErrorMsg(res.error || 'Não foi possível remover o modelo.');
+    }
+  };
+
+  // Apply Frequent Model Template to Form
+  const applyTemplate = (m: ModeloFrequente) => {
+    setTipoSolicitacao(m.tipo_solicitacao);
+    setCategoria(m.categoria);
+    setPrioridade(m.prioridade);
+    setTitulo(m.titulo);
+    setDescricaoProblema(m.descricao_padrao);
+    if (m.equipamento_sugerido) {
+      setEquipamento(m.equipamento_sugerido);
+    }
+    setOptionActionMsg(`Modelo "${m.titulo}" aplicado ao formulário!`);
+    setTimeout(() => setOptionActionMsg(null), 3000);
+  };
+
+  // Handle Submit Form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setValidationError(null);
+    setErrorMsg(null);
+    setSuccessChamado(null);
 
-    if (!solicitante.trim()) {
-      setValidationError('Por favor, informe o Nome do Solicitante.');
-      return;
-    }
-    if (!titulo.trim()) {
-      setValidationError('Por favor, informe o Título do chamado.');
-      return;
-    }
-    if (!descricaoProblema.trim()) {
-      setValidationError('Por favor, descreva detalhadamente o problema.');
+    if (!titulo.trim() || !descricaoProblema.trim()) {
+      setErrorMsg('Título do chamado e descrição detalhada do problema são obrigatórios.');
       return;
     }
 
     try {
-      const created = await onCreateChamado({
-        solicitante: solicitante.trim(),
-        tipo_solicitacao: tipoSolicitacao,
-        categoria,
+      const novo = await onCreateChamado({
+        solicitante: solicitante.trim() || currentUser.nome,
+        tipo_solicitacao: tipoSolicitacao || tiposSolicitacao[0],
+        categoria: categoria || categorias[0],
         prioridade,
-        equipamento: equipamento.trim() || 'Não especificado',
+        equipamento: equipamento.trim() || undefined,
         titulo: titulo.trim(),
         descricao_problema: descricaoProblema.trim()
       });
 
-      setLastCreatedTicket(created);
-      handleClearForm();
+      setSuccessChamado(novo);
+      setTitulo('');
+      setDescricaoProblema('');
+      setEquipamento('');
     } catch (err: any) {
-      setValidationError(`Falha ao abrir chamado: ${err?.message || 'Tente novamente.'}`);
+      setErrorMsg(`Erro ao registrar chamado: ${err?.message || 'Falha de comunicação'}`);
     }
   };
 
-  const isMine = (ch: Chamado) => {
-    if (!currentUser) return true;
-    const userName = (currentUser.nome || '').toLowerCase().trim();
-    const userLogin = (currentUser.login || '').toLowerCase().trim();
-    const solicitanteName = (ch.solicitante || '').toLowerCase().trim();
-    if (!userName && !userLogin) return true;
-    return (
-      (userName && solicitanteName.includes(userName)) ||
-      (userLogin && solicitanteName.includes(userLogin))
-    );
-  };
+  // STRICT ACCESS ISOLATION:
+  // "um perfil de Usuario onde o usuário possa abrir chamados e ao abrir chamado poder conversar no chatonline em tempo real e cada usuário tenha acessa apenas ao ambiente do sua acesso"
+  // For 'Usuário' profile, filter chamados strictly to tickets requested by this user!
+  const safeChamados = Array.isArray(chamados) ? chamados : [];
+  const isUsuarioComum = currentUser?.perfil === 'Usuário' || currentUser?.perfil === 'Operador';
+  const userNomeLower = (currentUser?.nome || '').toLowerCase();
+  const userLoginLower = (currentUser?.login || '').toLowerCase();
 
-  const filteredChamados = chamados.filter((ch) => {
-    const matchesSearch =
-      ch.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ch.solicitante.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ch.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ch.categoria.toLowerCase().includes(searchTerm.toLowerCase());
+  const meusChamados = safeChamados.filter(c => {
+    if (!c) return false;
+    if (!isUsuarioComum) return true; // Admin sees all
+    const solicitanteLower = (c.solicitante || '').toLowerCase();
 
-    const matchesStatus = statusFilter === 'Todos' || ch.status === statusFilter;
-    const matchesScope = scopeFilter === 'todos' || isMine(ch);
-
-    return matchesSearch && matchesStatus && matchesScope;
+    return (userNomeLower && (solicitanteLower.includes(userNomeLower) || userNomeLower.includes(solicitanteLower))) ||
+           (userLoginLower && solicitanteLower.includes(userLoginLower)) ||
+           (!userNomeLower && !userLoginLower);
   });
 
-  const totalMeusChamados = chamados.filter(isMine).length;
-  const totalAbertos = chamados.filter(c => c.status === 'Aberto').length;
-  const totalEmAtendimento = chamados.filter(c => c.status === 'Em Atendimento').length;
-  const totalEncerrados = chamados.filter(c => c.status === 'Encerrado').length;
+  const chamadosFiltrados = meusChamados.filter((c) => {
+    if (!c) return false;
+    const matchesStatus = statusFilter === 'Todos' || c.status === statusFilter;
+    const searchLower = (searchTerm || '').toLowerCase();
+    const matchesSearch =
+      (c.id || '').toLowerCase().includes(searchLower) ||
+      (c.titulo || '').toLowerCase().includes(searchLower) ||
+      (c.categoria || '').toLowerCase().includes(searchLower) ||
+      (c.solicitante || '').toLowerCase().includes(searchLower);
+
+    return matchesStatus && matchesSearch;
+  });
 
   return (
-    <div className="space-y-6">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
       
-      {/* Top Banner Navigation & Summary */}
-      <div className="bg-white rounded-xl p-4 sm:p-6 shadow-xs border border-slate-200">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
-                Área do Usuário
-              </span>
-              <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
-                Abertura e Acompanhamento de Chamados
-              </h2>
-            </div>
-            <p className="text-sm text-slate-500 mt-1">
-              Abra novas solicitações de suporte e acompanhe o status dos seus atendimentos em tempo real.
-            </p>
-          </div>
-
-          {/* Tab Selector */}
-          <div className="flex items-center p-1 bg-slate-100 rounded-lg border border-slate-200 shrink-0">
-            <button
-              id="tab-btn-abrir-chamado"
-              onClick={() => setActiveTab('abrir')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all ${
-                activeTab === 'abrir'
-                  ? 'bg-white text-indigo-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <PlusCircle size={15} />
-              <span>Abrir Novo Chamado</span>
-            </button>
-            <button
-              id="tab-btn-meus-chamados"
-              onClick={() => setActiveTab('listar')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all ${
-                activeTab === 'listar'
-                  ? 'bg-white text-indigo-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <List size={15} />
-              <span>Lista de Chamados</span>
-              <span className="ml-1 px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-xs font-bold">
-                {chamados.length}
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* Counter Pills */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100">
-          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Registrados</span>
-            <span className="text-xl font-bold text-slate-800">{chamados.length}</span>
-          </div>
-          <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100">
-            <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider block">Aguardando (Aberto)</span>
-            <span className="text-xl font-bold text-blue-800">{totalAbertos}</span>
-          </div>
-          <div className="bg-amber-50/50 p-3 rounded-lg border border-amber-100">
-            <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider block">Em Atendimento</span>
-            <span className="text-xl font-bold text-amber-800">{totalEmAtendimento}</span>
-          </div>
-          <div className="bg-green-50/50 p-3 rounded-lg border border-green-100">
-            <span className="text-[11px] font-bold text-green-700 uppercase tracking-wider block">Encerrados</span>
-            <span className="text-xl font-bold text-green-800">{totalEncerrados}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Success banner if ticket was just created */}
-      {lastCreatedTicket && (
-        <div
-          id="alert-chamado-sucesso"
-          className="bg-green-50 border border-green-200 p-4 sm:p-5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs"
-        >
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-lg bg-green-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-              <CheckCircle size={20} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="font-bold text-green-900 text-sm sm:text-base">
-                  Chamado {lastCreatedTicket.id} aberto com sucesso!
-                </h4>
-                <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase bg-blue-100 text-blue-800">
-                  Status: Aberto
-                </span>
+      {/* ============================================================== */}
+      {/* COLUNA ESQUERDA: FORMULÁRIO DE ABERTURA DE CHAMADO             */}
+      {/* ============================================================== */}
+      <div className="lg:col-span-5 bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+        
+        {/* Header do Formulário */}
+        <div className="bg-slate-900 text-white p-5 border-b border-slate-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-xs">
+                <PlusCircle size={22} />
               </div>
-              <p className="text-xs sm:text-sm text-green-700 mt-0.5">
-                Solicitante: <span className="font-semibold">{lastCreatedTicket.solicitante}</span> • Título: <span className="italic">"{lastCreatedTicket.titulo}"</span>
-              </p>
-              <p className="text-xs text-green-600 mt-0.5">
-                Gravado no banco de dados e pronto para atendimento pelo perfil Técnico.
-              </p>
+              <div>
+                <h2 className="font-bold text-base text-white">Abertura de Chamado TI</h2>
+                <p className="text-xs text-slate-300">
+                  {isUsuarioComum ? 'Suporte ao Usuário Corporativo' : 'Central de Requisições'}
+                </p>
+              </div>
             </div>
           </div>
+        </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+        {/* Global Feedback Notifications */}
+        {optionActionMsg && (
+          <div className="m-4 p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-900 text-xs flex items-center gap-2">
+            <CheckCircle size={15} className="text-indigo-600 shrink-0" />
+            <span>{optionActionMsg}</span>
+          </div>
+        )}
+
+        {/* Success Alert with Online Chat Quick Action */}
+        {successChamado && (
+          <div className="m-4 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-950 text-xs space-y-2">
+            <div className="flex items-center gap-2 font-bold text-emerald-900">
+              <CheckCircle size={16} className="text-emerald-600 shrink-0" />
+              <span>Chamado registrado com sucesso! Protocolo: {successChamado.id}</span>
+            </div>
+            <p className="text-slate-600 text-[11px] leading-relaxed">
+              Sua solicitação já está na fila de atendimento da equipe de TI. Você pode acompanhar o status ou iniciar uma conversa online em tempo real.
+            </p>
             {onOpenChat && (
               <button
-                id="btn-created-ticket-chat"
-                onClick={() => {
-                  onOpenChat(lastCreatedTicket.id);
-                }}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md transition-colors shadow-xs inline-flex items-center gap-1.5"
+                type="button"
+                onClick={() => onOpenChat(successChamado.id)}
+                className="mt-1 inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs"
               >
-                <MessageSquare size={13} />
-                <span>Conversar no Chat</span>
+                <MessageSquare size={14} />
+                <span>Conversar no Chat Online agora</span>
               </button>
             )}
-            <button
-              onClick={() => {
-                onSelectChamado(lastCreatedTicket);
-              }}
-              className="px-3 py-1.5 bg-green-700 hover:bg-green-800 text-white text-xs font-semibold rounded-md transition-colors shadow-xs"
-            >
-              Ver Detalhes
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('listar');
-                setLastCreatedTicket(null);
-              }}
-              className="px-3 py-1.5 bg-white border border-green-300 text-green-800 hover:bg-green-50 text-xs font-semibold rounded-md transition-colors"
-            >
-              Ir para Lista
-            </button>
-            <button
-              onClick={() => setLastCreatedTicket(null)}
-              className="text-xs text-green-700 hover:text-green-900 px-2 py-1"
-            >
-              Fechar
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* TAB 1: FORMULÁRIO ABRIR CHAMADO */}
-      {activeTab === 'abrir' && (
-        <div className="bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden">
+        {errorMsg && (
+          <div className="m-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-center gap-2">
+            <AlertCircle size={16} className="text-rose-600 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
           
-          {/* Header of the Form */}
-          <div className="bg-slate-800 text-white px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <h3 className="text-sm sm:text-base font-bold flex items-center gap-2">
-                <FileText size={16} className="text-indigo-400" />
-                Formulário de Abertura de Chamado
-              </h3>
-              <p className="text-xs text-slate-300">
-                Preencha as informações do incidente ou solicitação do usuário.
-              </p>
+          {/* ============================================================== */}
+          {/* SEÇÃO: MODELOS FREQUENTES DE SOLICITAÇÃO                       */}
+          {/* (Com botão para adicionar mais itens e excluir item)          */}
+          {/* ============================================================== */}
+          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                <Bookmark size={14} className="text-indigo-600" />
+                <span>Modelos Frequentes de Solicitação ({modelosFrequentes.length})</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setNovoModeloTipo(tiposSolicitacao[0] || '');
+                  setNovoModeloCategoria(categorias[0] || '');
+                  setIsAddModeloModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-white px-2 py-0.5 rounded border border-indigo-200"
+                title="Adicionar novo modelo frequente"
+              >
+                <Plus size={12} />
+                <span>Novo Modelo</span>
+              </button>
             </div>
 
-            {/* Live Timestamp & Auto-Status */}
-            <div className="flex items-center gap-3 text-xs bg-slate-900/60 px-3 py-1.5 rounded-md border border-slate-700">
-              <div className="flex items-center gap-1.5 text-slate-300">
-                <Calendar size={12} className="text-indigo-400" />
-                <span>{currentTime || 'Carregando data...'}</span>
-              </div>
-              <span className="text-slate-600">|</span>
-              <span className="text-blue-300 font-semibold flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
-                Status: Aberto
-              </span>
-            </div>
-          </div>
+            <p className="text-[11px] text-slate-500 mb-2">
+              Clique em um modelo para preencher o chamado instantaneamente:
+            </p>
 
-          {/* Quick Frequent Templates */}
-          <div className="bg-indigo-50/40 border-b border-indigo-100 px-6 py-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-900">
-                <Sparkles size={14} className="text-indigo-600" />
-                <span>Modelos Frequentes de Solicitação (Preenchimento Rápido):</span>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {QUICK_TEMPLATES.map((tmpl, idx) => (
-                <button
-                  key={idx}
-                  id={`btn-template-${idx}`}
-                  type="button"
-                  onClick={() => handleApplyTemplate(tmpl)}
-                  className="px-2.5 py-1 rounded-md bg-white hover:bg-indigo-50 text-slate-700 hover:text-indigo-900 border border-indigo-200 text-xs font-medium transition-colors shadow-xs"
+            <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
+              {modelosFrequentes.map((m) => (
+                <div
+                  key={m.id}
+                  onClick={() => applyTemplate(m)}
+                  className="group cursor-pointer p-2 bg-white rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 transition-all flex items-center justify-between text-xs"
                 >
-                  {tmpl.label}
-                </button>
+                  <div className="truncate mr-2">
+                    <span className="font-semibold text-slate-800 group-hover:text-indigo-900 block truncate">
+                      {m.titulo}
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      {m.tipo_solicitacao} · {m.prioridade}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteModelo(m.id, e)}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 transition-opacity"
+                    title="Excluir este modelo"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               ))}
             </div>
           </div>
 
-          {/* Validation Alert */}
-          {validationError && (
-            <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-xs flex items-center gap-2">
-              <AlertCircle size={16} className="text-red-600 shrink-0" />
-              <span>{validationError}</span>
-            </div>
-          )}
-
-          {/* Form */}
-          <form id="form-abrir-chamado" onSubmit={handleSubmit} className="p-6 space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              {/* Solicitante */}
-              <div>
-                <label htmlFor="input-solicitante" className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Nome do Solicitante <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                    <UserIcon size={15} />
-                  </div>
-                  <input
-                    id="input-solicitante"
-                    type="text"
-                    required
-                    value={solicitante}
-                    onChange={(e) => setSolicitante(e.target.value)}
-                    placeholder="Ex: Ana Paula - Departamento Financeiro"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                  />
-                </div>
+          {/* Solicitante */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Nome do Solicitante <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <UserIcon size={15} />
               </div>
-
-              {/* Equipamento / Dispositivo */}
-              <div>
-                <label htmlFor="input-equipamento" className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Equipamento / Patrimônio <span className="text-slate-400 font-normal">(Opcional)</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                    <Laptop size={15} />
-                  </div>
-                  <input
-                    id="input-equipamento"
-                    type="text"
-                    value={equipamento}
-                    onChange={(e) => setEquipamento(e.target.value)}
-                    placeholder="Ex: Notebook Dell Vostro #04 / Impressora RH"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                  />
-                </div>
-              </div>
-
-              {/* Tipo de Solicitação */}
-              <div>
-                <label htmlFor="select-tipo-solicitacao" className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Tipo de Solicitação <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                    <Layers size={15} />
-                  </div>
-                  <select
-                    id="select-tipo-solicitacao"
-                    value={tipoSolicitacao}
-                    onChange={(e) => setTipoSolicitacao(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                  >
-                    {TIPOS_SOLICITACAO.map((tipo) => (
-                      <option key={tipo} value={tipo}>
-                        {tipo}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Categoria */}
-              <div>
-                <label htmlFor="select-categoria" className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Categoria do Chamado <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                    <Tag size={15} />
-                  </div>
-                  <select
-                    id="select-categoria"
-                    value={categoria}
-                    onChange={(e) => setCategoria(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                  >
-                    {CATEGORIAS.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Prioridade Picker */}
-            <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Prioridade do Chamado <span className="text-red-500">*</span>
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {PRIORIDADES.map((p) => {
-                  const isSelected = prioridade === p;
-                  return (
-                    <button
-                      key={p}
-                      id={`btn-prioridade-${p.toLowerCase()}`}
-                      type="button"
-                      onClick={() => setPrioridade(p)}
-                      className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-bold transition-all ${
-                        isSelected
-                          ? p === 'Crítica'
-                            ? 'bg-red-50 border-red-300 text-red-700 shadow-xs'
-                            : p === 'Alta'
-                            ? 'bg-red-50 border-red-200 text-red-600 shadow-xs'
-                            : p === 'Média'
-                            ? 'bg-amber-50 border-amber-200 text-amber-800 shadow-xs'
-                            : 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-xs'
-                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                      }`}
-                    >
-                      <AlertTriangle size={13} className={isSelected ? 'text-inherit' : 'text-slate-400'} />
-                      <span>{p}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Título do Chamado */}
-            <div>
-              <label htmlFor="input-titulo" className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                Título do Chamado <span className="text-red-500">*</span>
-              </label>
               <input
-                id="input-titulo"
                 type="text"
                 required
-                value={titulo}
-                onChange={(e) => setTitulo(e.target.value)}
-                placeholder="Ex: Monitor principal piscando e desligando sozinho"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                value={solicitante}
+                onChange={(e) => setSolicitante(e.target.value)}
+                placeholder="Ex: Mariana Souza (Recursos Humanos)"
+                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
-            </div>
-
-            {/* Descrição do Problema */}
-            <div>
-              <label htmlFor="textarea-descricao" className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                Descrição Detalhada do Problema <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                id="textarea-descricao"
-                rows={4}
-                required
-                value={descricaoProblema}
-                onChange={(e) => setDescricaoProblema(e.target.value)}
-                placeholder="Descreva com detalhes o que aconteceu, mensagens de erro apresentadas ou ações realizadas pelo usuário..."
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-              />
-            </div>
-
-            {/* Action Bar */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200">
-              <button
-                type="button"
-                onClick={handleClearForm}
-                className="text-xs font-semibold text-slate-400 hover:text-slate-700 transition-colors"
-              >
-                Limpar Formulário
-              </button>
-
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <button
-                  id="btn-abrir-chamado-submit"
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 transition-all shadow-xs shadow-indigo-100 disabled:opacity-50"
-                >
-                  <PlusCircle size={16} />
-                  <span>{isSubmitting ? 'Registrando Chamado...' : 'Abrir Chamado'}</span>
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* TAB 2: LISTA DE CHAMADOS ABERTOS */}
-      {activeTab === 'listar' && (
-        <div className="bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden flex flex-col">
-          
-          {/* Filter and Search Bar */}
-          <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex flex-col gap-3">
-            
-            {/* Scope tabs: Meus Chamados vs Todos */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
-              <div className="flex items-center p-1 bg-slate-200/70 rounded-lg border border-slate-300/60 shrink-0">
-                <button
-                  id="tab-scope-meus"
-                  type="button"
-                  onClick={() => setScopeFilter('meus')}
-                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
-                    scopeFilter === 'meus'
-                      ? 'bg-white text-indigo-700 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Meus Chamados ({totalMeusChamados})
-                </button>
-                <button
-                  id="tab-scope-todos"
-                  type="button"
-                  onClick={() => setScopeFilter('todos')}
-                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
-                    scopeFilter === 'todos'
-                      ? 'bg-white text-indigo-700 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Todos os Chamados ({chamados.length})
-                </button>
-              </div>
-
-              {scopeFilter === 'meus' && (
-                <span className="text-xs text-slate-500">
-                  Exibindo chamados vinculados a <strong className="text-slate-700">{currentUser?.nome || 'sua conta'}</strong>
-                </span>
-              )}
-            </div>
-
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              {/* Search Input */}
-              <div className="relative flex-1 max-w-md">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Search size={15} />
-                </div>
-                <input
-                  id="input-search-operador"
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Buscar por protocolo, solicitante ou título..."
-                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                />
-              </div>
-
-              {/* Status Filter Buttons */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                {(['Todos', 'Aberto', 'Em Atendimento', 'Encerrado'] as const).map((st) => (
-                  <button
-                    key={st}
-                    id={`filter-operador-${st.toLowerCase().replace(' ', '-')}`}
-                    onClick={() => setStatusFilter(st)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
-                      statusFilter === st
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                    }`}
-                  >
-                    {st}
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
 
-          {/* List of Tickets */}
-          {filteredChamados.length === 0 ? (
-            <div className="p-12 text-center">
-              <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mx-auto text-slate-400 mb-3">
-                <FileText size={22} />
-              </div>
-              <h4 className="text-base font-bold text-slate-700">Nenhum chamado encontrado</h4>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-sm mx-auto">
-                {chamados.length === 0
-                  ? 'Ainda não há chamados registrados no sistema. Use a aba "Abrir Novo Chamado" para criar o primeiro.'
-                  : 'Nenhum chamado corresponde aos filtros pesquisados.'}
-              </p>
-              {chamados.length === 0 && (
+          {/* ============================================================== */}
+          {/* TIPO DE SOLICITAÇÃO (COM BOTÕES PARA ADICIONAR E EXCLUIR ITEM) */}
+          {/* ============================================================== */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Tipo de Solicitação <span className="text-red-500">*</span>
+              </label>
+              <div className="flex items-center gap-1">
                 <button
-                  onClick={() => setActiveTab('abrir')}
-                  className="mt-4 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-colors inline-flex items-center gap-1.5 shadow-xs"
+                  type="button"
+                  onClick={() => setIsAddTipoModalOpen(true)}
+                  className="p-1 text-indigo-600 hover:bg-indigo-50 rounded text-xs flex items-center gap-1 font-semibold"
+                  title="Adicionar mais itens ao Tipo de Solicitação"
                 >
-                  <PlusCircle size={15} />
-                  <span>Abrir Primeiro Chamado</span>
+                  <Plus size={13} />
+                  <span className="text-[10px]">Adicionar Tipo</span>
                 </button>
-              )}
+                {tiposSolicitacao.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteCurrentTipo}
+                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded text-xs"
+                    title={`Excluir tipo selecionado: "${tipoSolicitacao}"`}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <select
+              value={tipoSolicitacao}
+              onChange={(e) => setTipoSolicitacao(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {tiposSolicitacao.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* ============================================================== */}
+          {/* CATEGORIA (COM BOTÕES PARA ADICIONAR E EXCLUIR ITEM)          */}
+          {/* ============================================================== */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Categoria do Problema <span className="text-red-500">*</span>
+              </label>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setIsAddCategoriaModalOpen(true)}
+                  className="p-1 text-indigo-600 hover:bg-indigo-50 rounded text-xs flex items-center gap-1 font-semibold"
+                  title="Adicionar mais itens à Categoria"
+                >
+                  <Plus size={13} />
+                  <span className="text-[10px]">Adicionar Categoria</span>
+                </button>
+                {categorias.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteCurrentCategoria}
+                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded text-xs"
+                    title={`Excluir categoria selecionada: "${categoria}"`}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <select
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {categorias.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Prioridade e Equipamento */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Prioridade Estimada
+              </label>
+              <select
+                value={prioridade}
+                onChange={(e) => setPrioridade(e.target.value as ChamadoPrioridade)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-xs sm:text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                {PRIORIDADES.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Equipamento / Patrimônio
+              </label>
+              <input
+                type="text"
+                value={equipamento}
+                onChange={(e) => setEquipamento(e.target.value)}
+                placeholder="Ex: NOTE-001 ou Impressora HP"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+
+          {/* Título do Chamado */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Título Resumido do Chamado <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              placeholder="Ex: Monitor secundário piscando e perdendo sinal HDMI"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          {/* Descrição Detalhada */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Descrição Detalhada do Problema <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              required
+              rows={3}
+              value={descricaoProblema}
+              onChange={(e) => setDescricaoProblema(e.target.value)}
+              placeholder="Descreva o que ocorreu, mensagens de erro exibidas e quando o problema iniciou..."
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            ></textarea>
+          </div>
+
+          {/* Botão de Envio */}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs sm:text-sm font-bold rounded-xl transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
+          >
+            <PlusCircle size={16} />
+            <span>{isSubmitting ? 'Registrando Chamado...' : 'Abrir Chamado de TI'}</span>
+          </button>
+
+        </form>
+
+      </div>
+
+      {/* ============================================================== */}
+      {/* COLUNA DIREITA: MEUS CHAMADOS (ISOLAMENTO DE AMBIENTE)         */}
+      {/* ============================================================== */}
+      <div className="lg:col-span-7 space-y-4">
+        
+        {/* Header da Lista de Chamados do Usuário */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+              <List size={17} className="text-indigo-600" />
+              <span>{isUsuarioComum ? 'Meus Chamados Solicitados' : 'Fila Geral de Chamados'}</span>
+              <span className="text-xs text-slate-400 font-normal">({chamadosFiltrados.length})</span>
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {isUsuarioComum
+                ? 'Você tem acesso exclusivo aos seus chamados abertos e histórico de atendimento'
+                : 'Visão completa dos chamados corporativos'}
+            </p>
+          </div>
+
+          {/* Chat Online Launcher */}
+          {onOpenChat && (
+            <button
+              onClick={() => onOpenChat('geral')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg text-xs font-bold transition-colors"
+            >
+              <MessageSquare size={14} />
+              <span>Chat de Suporte Online</span>
+            </button>
+          )}
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por protocolo, título ou categoria..."
+              className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg text-xs">
+            {(['Todos', 'Aberto', 'Em Atendimento', 'Encerrado'] as const).map((st) => (
+              <button
+                key={st}
+                onClick={() => setStatusFilter(st)}
+                className={`px-2.5 py-1 font-medium rounded-md transition-colors ${
+                  statusFilter === st
+                    ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tickets Cards List */}
+        <div className="space-y-3">
+          {chamadosFiltrados.length === 0 ? (
+            <div className="bg-white p-12 text-center rounded-xl border border-slate-200">
+              <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+              <p className="text-xs font-bold text-slate-700">Nenhum chamado encontrado</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {isUsuarioComum
+                  ? 'Você não possui chamados abertos nesta condição. Use o formulário à esquerda para solicitar suporte.'
+                  : 'Fila limpa no momento.'}
+              </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold">
-                  <tr>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Protocolo</th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Solicitante</th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Título</th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Status</th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Prioridade</th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-right">Ação</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredChamados.map((chamado) => (
-                    <tr
-                      key={chamado.id}
-                      id={`chamado-row-${chamado.id}`}
-                      className="hover:bg-slate-50 transition-colors"
-                    >
-                      <td className="px-4 py-3 font-mono font-bold text-indigo-600 text-xs">
-                        {chamado.id}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-900 text-xs sm:text-sm">
-                        {chamado.solicitante}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700 text-xs sm:text-sm max-w-xs truncate">
-                        {chamado.titulo}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={chamado.status} size="sm" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <PriorityBadge prioridade={chamado.prioridade} />
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {onOpenChat && (
-                            <button
-                              id={`btn-chat-chamado-${chamado.id}`}
-                              onClick={() => onOpenChat(chamado.id)}
-                              title="Abrir chat online deste chamado"
-                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-md transition-colors border border-indigo-200"
-                            >
-                              <MessageSquare size={13} />
-                              <span className="hidden sm:inline">Chat</span>
-                            </button>
-                          )}
-                          <button
-                            id={`btn-view-chamado-${chamado.id}`}
-                            onClick={() => onSelectChamado(chamado)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md transition-colors border border-slate-200"
-                          >
-                            <Eye size={13} />
-                            <span>Detalhes</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+            chamadosFiltrados.map((ch) => (
+              <div
+                key={ch.id}
+                className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs hover:border-indigo-300 transition-all space-y-2.5"
+              >
+                {/* Header do Card */}
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                        {ch.id}
+                      </span>
+                      <StatusBadge status={ch.status} />
+                      <PriorityBadge priority={ch.prioridade} />
+                    </div>
+                    <h4 className="font-bold text-sm text-slate-900 mt-1">
+                      {ch.titulo}
+                    </h4>
+                  </div>
 
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {onOpenChat && (
+                      <button
+                        onClick={() => onOpenChat(ch.id)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200"
+                        title="Abrir chat online em tempo real deste chamado"
+                      >
+                        <MessageSquare size={13} />
+                        <span className="hidden sm:inline">Chat</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => onSelectChamado(ch)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                    >
+                      <Eye size={13} />
+                      <span>Detalhes</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Problem description preview */}
+                <p className="text-xs text-slate-600 line-clamp-2">
+                  {ch.descricao_problema}
+                </p>
+
+                {/* Unboxed Metadata (Frontend design guidelines) */}
+                <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                  <span>Categoria: <strong className="text-slate-700">{ch.categoria}</strong></span>
+                  <span aria-hidden="true">·</span>
+                  <span>Tipo: <strong className="text-slate-700">{ch.tipo_solicitacao}</strong></span>
+                  {ch.equipamento && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>Equipamento: <strong className="text-slate-700">{ch.equipamento}</strong></span>
+                    </>
+                  )}
+                  {ch.tecnico_responsavel && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>Técnico: <strong className="text-indigo-700">{ch.tecnico_responsavel}</strong></span>
+                    </>
+                  )}
+                </div>
+
+              </div>
+            ))
+          )}
+        </div>
+
+      </div>
+
+      {/* ============================================================== */}
+      {/* MODAL: ADICIONAR TIPO DE SOLICITAÇÃO                           */}
+      {/* ============================================================== */}
+      {isAddTipoModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl p-5 max-w-sm w-full border border-slate-200 shadow-2xl">
+            <h3 className="font-bold text-sm text-slate-900 mb-1">Adicionar Tipo de Solicitação</h3>
+            <p className="text-xs text-slate-500 mb-3">
+              Informe o novo tipo para disponibilizar no menu de chamados:
+            </p>
+
+            <form onSubmit={handleAddTipo} className="space-y-3">
+              <input
+                type="text"
+                required
+                value={novoTipoInput}
+                onChange={(e) => setNovoTipoInput(e.target.value)}
+                placeholder="Ex: Treinamento / Capacitação"
+                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddTipoModalOpen(false)}
+                  className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-900 font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                >
+                  Adicionar Tipo
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL: ADICIONAR CATEGORIA                                    */}
+      {/* ============================================================== */}
+      {isAddCategoriaModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl p-5 max-w-sm w-full border border-slate-200 shadow-2xl">
+            <h3 className="font-bold text-sm text-slate-900 mb-1">Adicionar Categoria de Chamado</h3>
+            <p className="text-xs text-slate-500 mb-3">
+              Informe a nova categoria para classificar as solicitações:
+            </p>
+
+            <form onSubmit={handleAddCategoria} className="space-y-3">
+              <input
+                type="text"
+                required
+                value={novaCategoriaInput}
+                onChange={(e) => setNovaCategoriaInput(e.target.value)}
+                placeholder="Ex: Banco de Dados / Relatórios"
+                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddCategoriaModalOpen(false)}
+                  className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-900 font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                >
+                  Adicionar Categoria
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL: ADICIONAR MODELO FREQUENTE                              */}
+      {/* ============================================================== */}
+      {isAddModeloModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl p-5 max-w-md w-full border border-slate-200 shadow-2xl">
+            <h3 className="font-bold text-sm text-slate-900 mb-1">Criar Novo Modelo Frequente</h3>
+            <p className="text-xs text-slate-500 mb-3">
+              Configure um modelo rápido para facilitar a abertura de chamados repetitivos:
+            </p>
+
+            <form onSubmit={handleAddModelo} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Título do Modelo *</label>
+                <input
+                  type="text"
+                  required
+                  value={novoModeloTitulo}
+                  onChange={(e) => setNovoModeloTitulo(e.target.value)}
+                  placeholder="Ex: Troca de mouse ou teclado quebrado"
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Tipo</label>
+                  <select
+                    value={novoModeloTipo}
+                    onChange={(e) => setNovoModeloTipo(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {tiposSolicitacao.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Prioridade</label>
+                  <select
+                    value={novoModeloPrioridade}
+                    onChange={(e) => setNovoModeloPrioridade(e.target.value as ChamadoPrioridade)}
+                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                  >
+                    {PRIORIDADES.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Categoria</label>
+                <select
+                  value={novoModeloCategoria}
+                  onChange={(e) => setNovoModeloCategoria(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {categorias.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Descrição Padrão *</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={novoModeloDescricao}
+                  onChange={(e) => setNovoModeloDescricao(e.target.value)}
+                  placeholder="Texto padrão que será preenchido automaticamente..."
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                ></textarea>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModeloModalOpen(false)}
+                  className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-900 font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                >
+                  Salvar Modelo
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
     </div>
   );
 };
-

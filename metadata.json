@@ -1,6 +1,6 @@
 {
   "name": "Sistema de Chamados TI",
-  "description": "Sistema de abertura e atendimento de chamados para área de TI com controle de perfis (Operador e Técnico), chat online em tempo real com envio de anexos e integração Supabase.",
+  "description": "Sistema corporativo de abertura e atendimento de chamados de TI com controle de perfis (Administrador, Técnico e Usuário), inventário de equipamentos com campos customizados, comunicados em banner na tela, dashboard interativo e suporte a banco de dados Docker local.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

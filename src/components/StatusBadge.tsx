@@ -3,11 +3,11 @@ import { ChamadoStatus } from '../types';
 import { Clock, PlayCircle, CheckCircle2 } from 'lucide-react';
 
 interface StatusBadgeProps {
-  status: ChamadoStatus;
+  status?: ChamadoStatus | string;
   size?: 'sm' | 'md' | 'lg';
 }
 
-export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' }) => {
+export const StatusBadge: React.FC<StatusBadgeProps> = ({ status = 'Aberto', size = 'md' }) => {
   const sizeClasses = {
     sm: 'px-2 py-0.5 text-xs',
     md: 'px-2.5 py-1 text-xs font-semibold',
@@ -15,8 +15,9 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
   };
 
   const iconSize = size === 'sm' ? 12 : size === 'md' ? 14 : 16;
+  const safeStatus = status || 'Aberto';
 
-  if (status === 'Aberto') {
+  if (safeStatus === 'Aberto') {
     return (
       <span
         id={`status-badge-aberto-${size}`}
@@ -28,7 +29,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
     );
   }
 
-  if (status === 'Em Atendimento') {
+  if (safeStatus === 'Em Atendimento') {
     return (
       <span
         id={`status-badge-atendimento-${size}`}
@@ -46,7 +47,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
       className={`inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 text-emerald-800 ${sizeClasses[size]}`}
     >
       <CheckCircle2 size={iconSize} className="text-emerald-600" />
-      <span className="whitespace-nowrap font-semibold">Encerrado</span>
+      <span className="whitespace-nowrap font-semibold">{safeStatus}</span>
     </span>
   );
 };

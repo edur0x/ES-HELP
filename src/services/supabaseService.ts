@@ -18,12 +18,12 @@ export interface StoredUserAccount {
 
 const DEFAULT_USERS: StoredUserAccount[] = [
   {
-    id: 'usr-operador-01',
-    login: 'operador',
-    nome: 'Carlos Mendes',
-    email: 'operador@empresa.com',
-    senha: 'operador123',
-    perfil: 'Usuário',
+    id: 'usr-admin-01',
+    login: 'admin',
+    nome: 'Administrador TI',
+    email: 'admin@empresa.com',
+    senha: 'admin123',
+    perfil: 'Administrador',
     criadoEm: new Date().toISOString(),
     origem: 'local'
   },
@@ -46,10 +46,115 @@ const DEFAULT_USERS: StoredUserAccount[] = [
     perfil: 'Usuário',
     criadoEm: new Date().toISOString(),
     origem: 'local'
+  },
+  {
+    id: 'usr-operador-01',
+    login: 'operador',
+    nome: 'Carlos Mendes',
+    email: 'carlos.operador@empresa.com',
+    senha: 'operador123',
+    perfil: 'Usuário',
+    criadoEm: new Date().toISOString(),
+    origem: 'local'
   }
 ];
 
-// Load stored config or env variables
+// Initial realistic seed tickets for rich dashboard metrics
+const DEFAULT_CHAMADOS: Chamado[] = [
+  {
+    id: 'CH-2601',
+    solicitante: 'Mariana Souza',
+    tipo_solicitacao: 'Incidente (Falha / Erro)',
+    categoria: 'Impressoras & Periféricos',
+    prioridade: 'Média',
+    equipamento: 'Impressora HP LaserJet Pro M404dw',
+    titulo: 'Impressora travando papel na bandeja 2',
+    descricao_problema: 'A impressora do setor de RH travou durante a impressão da folha de pagamento. Apresenta luz de atenção piscando.',
+    status: 'Aberto',
+    data_abertura: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+    prazo_horas: 24
+  },
+  {
+    id: 'CH-2602',
+    solicitante: 'Carlos Mendes',
+    tipo_solicitacao: 'Incidente (Falha / Erro)',
+    categoria: 'Hardware (Computadores/Monitores)',
+    prioridade: 'Alta',
+    equipamento: 'Desktop Dell OptiPlex 7090',
+    titulo: 'Computador da contabilidade sem ligar após queda de energia',
+    descricao_problema: 'A máquina não dá sinal de vida ao apertar o botão power. Suspeita de fonte queimada.',
+    status: 'Em Atendimento',
+    data_abertura: new Date(Date.now() - 1000 * 60 * 60 * 18).toISOString(),
+    tecnico_responsavel: 'Eduardo (Técnico TI)',
+    prazo_horas: 12
+  },
+  {
+    id: 'CH-2599',
+    solicitante: 'Roberto Vendas',
+    tipo_solicitacao: 'Incidente (Falha / Erro)',
+    categoria: 'Rede / Internet / Wi-Fi',
+    prioridade: 'Crítica',
+    equipamento: 'Switch Cisco Catalyst 2960X',
+    titulo: 'Queda de conexão no setor comercial e CRM inoperante',
+    descricao_problema: 'Equipe de vendas sem acesso à internet e sem comunicação com o servidor de banco de dados.',
+    status: 'Aberto',
+    // Aberto há mais de 36 horas para demonstrar Chamado Atrasado no dashboard
+    data_abertura: new Date(Date.now() - 1000 * 60 * 60 * 36).toISOString(),
+    prazo_horas: 8
+  },
+  {
+    id: 'CH-2598',
+    solicitante: 'Fernanda Lima',
+    tipo_solicitacao: 'Acesso / Permissões',
+    categoria: 'E-mail / Contas de Acesso',
+    prioridade: 'Baixa',
+    equipamento: 'Notebook Dell Latitude 3420',
+    titulo: 'Liberação de credencial VPN e pasta de rede',
+    descricao_problema: 'Solicitação de acesso à pasta do Financeiro e configuração do cliente VPN corporativo.',
+    status: 'Encerrado',
+    data_abertura: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+    data_encerramento: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+    tecnico_responsavel: 'Eduardo (Técnico TI)',
+    descricao_servico: 'Criado usuário no grupo de segurança do Active Directory e enviado manual de instruções de acesso VPN com 2FA.',
+    prazo_horas: 48
+  },
+  {
+    id: 'CH-2595',
+    solicitante: 'Lucas Martins',
+    tipo_solicitacao: 'Instalação / Configuração',
+    categoria: 'Software / Aplicativos',
+    prioridade: 'Média',
+    equipamento: 'Notebook Lenovo ThinkPad T14',
+    titulo: 'Instalação de software de análise de dados',
+    descricao_problema: 'Necessidade de instalação do pacote corporativo de auditoria e drivers atualizados.',
+    status: 'Encerrado',
+    data_abertura: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
+    data_encerramento: new Date(Date.now() - 1000 * 60 * 60 * 50).toISOString(),
+    tecnico_responsavel: 'Eduardo (Técnico TI)',
+    descricao_servico: 'Realizada a instalação remota do pacote de softwares e validação de funcionamento junto ao usuário.',
+    prazo_horas: 24
+  }
+];
+
+// Helper to check if a ticket is overdue
+export function isChamadoAtrasado(chamado?: Chamado | null): boolean {
+  if (!chamado || chamado.status === 'Encerrado') return false;
+  if (!chamado.data_abertura) return false;
+  const openedTime = new Date(chamado.data_abertura).getTime();
+  if (isNaN(openedTime)) return false;
+  const now = Date.now();
+  const hoursElapsed = (now - openedTime) / (1000 * 60 * 60);
+
+  // If specific SLA hours is configured, use it; otherwise standard SLA by priority
+  const slaHours = chamado.prazo_horas || (
+    chamado.prioridade === 'Crítica' ? 6 :
+    chamado.prioridade === 'Alta' ? 12 :
+    chamado.prioridade === 'Média' ? 24 : 48
+  );
+
+  return hoursElapsed > slaHours;
+}
+
 function getInitialConfig() {
   const envUrl = import.meta.env.VITE_SUPABASE_URL || '';
   const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -86,18 +191,23 @@ if (currentConfig.enabled && currentConfig.url && currentConfig.anonKey) {
   }
 }
 
-// Local Storage helpers for fallback persistence
 function getLocalUsers(): StoredUserAccount[] {
   try {
     const data = localStorage.getItem(STORAGE_KEY_USERS);
     if (data) {
       const parsed: StoredUserAccount[] = JSON.parse(data);
-      // Ensure defaults exist if list is empty
-      if (parsed.length === 0) {
-        saveLocalUsers(DEFAULT_USERS);
-        return DEFAULT_USERS;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const validUsers = parsed.filter(u => u && typeof u === 'object' && u.login);
+        if (validUsers.length > 0) {
+          // Ensure admin user exists in list
+          if (!validUsers.some(u => u.perfil === 'Administrador')) {
+            const withAdmin = [DEFAULT_USERS[0], ...validUsers];
+            saveLocalUsers(withAdmin);
+            return withAdmin;
+          }
+          return validUsers;
+        }
       }
-      return parsed;
     }
   } catch (e) {
     console.error('Erro ao ler usuários do localStorage', e);
@@ -117,11 +227,18 @@ function saveLocalUsers(users: StoredUserAccount[]): void {
 function getLocalChamados(): Chamado[] {
   try {
     const data = localStorage.getItem(STORAGE_KEY_CHAMADOS);
-    return data ? JSON.parse(data) : [];
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const valid = parsed.filter(c => c && typeof c === 'object' && c.id && c.titulo);
+        if (valid.length > 0) return valid;
+      }
+    }
   } catch (e) {
     console.error('Erro ao ler chamados do localStorage', e);
-    return [];
   }
+  saveLocalChamados(DEFAULT_CHAMADOS);
+  return DEFAULT_CHAMADOS;
 }
 
 function saveLocalChamados(chamados: Chamado[]): void {
@@ -132,7 +249,6 @@ function saveLocalChamados(chamados: Chamado[]): void {
   }
 }
 
-// Generate human-friendly ID like #CH-2601, #CH-2602
 function generateChamadoId(existingChamados: Chamado[]): string {
   const prefix = 'CH-';
   const now = new Date();
@@ -180,14 +296,14 @@ export const SupabaseService = {
       if (error) {
         return { success: false, message: `Erro do Supabase: ${error.message}` };
       }
-      return { success: true, message: 'Conexão com a tabela "chamados" no Supabase estabelecida com sucesso!' };
+      return { success: true, message: 'Conexão com o banco estabelecida com sucesso!' };
     } catch (err: any) {
       return { success: false, message: `Falha na conexão: ${err?.message || 'Erro desconhecido'}` };
     }
   },
 
   // -------------------------------------------------------------
-  // USER & AUTH SERVICES
+  // USER & AUTH SERVICES (COM PERFIS ADMINISTRADOR, TÉCNICO E USUÁRIO)
   // -------------------------------------------------------------
   async getUsers(): Promise<StoredUserAccount[]> {
     if (supabaseClient && currentConfig.enabled) {
@@ -204,7 +320,7 @@ export const SupabaseService = {
             nome: u.nome,
             email: u.email,
             senha: u.senha,
-            perfil: (u.perfil === 'Técnico' ? 'Técnico' : 'Usuário') as UserProfile,
+            perfil: (u.perfil === 'Administrador' ? 'Administrador' : u.perfil === 'Técnico' ? 'Técnico' : 'Usuário') as UserProfile,
             criadoEm: u.criado_em || new Date().toISOString(),
             origem: u.origem || 'supabase'
           }));
@@ -252,25 +368,31 @@ export const SupabaseService = {
     };
   },
 
-  // Public signup: Strictly only creates "Usuário" profile
-  async registerPublicUser(data: { nome: string; login: string; email?: string; senha: string }): Promise<{ success: boolean; user?: User; error?: string }> {
+  // Criação de Usuário pelo Administrador (qualquer perfil: Administrador, Técnico ou Usuário)
+  async createUserByAdmin(data: {
+    nome: string;
+    login: string;
+    email?: string;
+    senha: string;
+    perfil: UserProfile;
+  }): Promise<{ success: boolean; user?: User; error?: string }> {
     const cleanLogin = data.login.trim().toLowerCase();
     if (!cleanLogin || !data.nome.trim() || !data.senha) {
-      return { success: false, error: 'Preencha todos os campos obrigatórios.' };
+      return { success: false, error: 'Por favor, preencha todos os campos obrigatórios.' };
     }
 
     const currentUsers = getLocalUsers();
     if (currentUsers.some(u => u.login.toLowerCase() === cleanLogin)) {
-      return { success: false, error: 'Este login já está cadastrado. Escolha outro.' };
+      return { success: false, error: 'Este login já está cadastrado no sistema. Escolha outro.' };
     }
 
     const newAccount: StoredUserAccount = {
-      id: `usr-${Date.now()}`,
+      id: `usr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       login: cleanLogin,
       nome: data.nome.trim(),
       email: data.email?.trim() || `${cleanLogin}@empresa.com`,
       senha: data.senha,
-      perfil: 'Usuário', // Mandated by spec: public registration can only create 'Usuário'
+      perfil: data.perfil,
       criadoEm: new Date().toISOString(),
       origem: 'local'
     };
@@ -278,7 +400,6 @@ export const SupabaseService = {
     const updated = [newAccount, ...currentUsers];
     saveLocalUsers(updated);
 
-    // Try sync to Supabase table 'usuarios' if available
     if (supabaseClient && currentConfig.enabled) {
       try {
         await supabaseClient.from('usuarios').insert([{
@@ -287,7 +408,7 @@ export const SupabaseService = {
           nome: newAccount.nome,
           email: newAccount.email,
           senha: newAccount.senha,
-          perfil: 'Usuário',
+          perfil: newAccount.perfil,
           criado_em: newAccount.criadoEm,
           origem: 'local'
         }]);
@@ -308,59 +429,56 @@ export const SupabaseService = {
     };
   },
 
-  // Technician creation: Allowed for creating other technicians
+  // Alias for backward compatibility with CadastrarTecnicoModal
   async createTechnician(data: { nome: string; login: string; email?: string; senha: string }): Promise<{ success: boolean; user?: User; error?: string }> {
-    const cleanLogin = data.login.trim().toLowerCase();
-    if (!cleanLogin || !data.nome.trim() || !data.senha) {
-      return { success: false, error: 'Preencha todos os campos obrigatórios.' };
-    }
+    return this.createUserByAdmin({ ...data, perfil: 'Técnico' });
+  },
 
+  // Atualizar usuário (Admin pode trocar nome, perfil ou redefinir senha)
+  async updateUserByAdmin(id: string, updates: Partial<StoredUserAccount>): Promise<{ success: boolean; user?: User; error?: string }> {
     const currentUsers = getLocalUsers();
-    if (currentUsers.some(u => u.login.toLowerCase() === cleanLogin)) {
-      return { success: false, error: 'Este login já está em uso.' };
+    const index = currentUsers.findIndex(u => u.id === id);
+    if (index === -1) {
+      return { success: false, error: 'Usuário não localizado.' };
     }
 
-    const newTechAccount: StoredUserAccount = {
-      id: `tech-${Date.now()}`,
-      login: cleanLogin,
-      nome: data.nome.trim(),
-      email: data.email?.trim() || `${cleanLogin}@suporte.com`,
-      senha: data.senha,
-      perfil: 'Técnico', // Granted technician role
-      criadoEm: new Date().toISOString(),
-      origem: 'local'
+    const updatedAccount: StoredUserAccount = {
+      ...currentUsers[index],
+      ...updates
     };
 
-    const updated = [newTechAccount, ...currentUsers];
-    saveLocalUsers(updated);
-
-    if (supabaseClient && currentConfig.enabled) {
-      try {
-        await supabaseClient.from('usuarios').insert([{
-          id: newTechAccount.id,
-          login: newTechAccount.login,
-          nome: newTechAccount.nome,
-          email: newTechAccount.email,
-          senha: newTechAccount.senha,
-          perfil: 'Técnico',
-          criado_em: newTechAccount.criadoEm,
-          origem: 'local'
-        }]);
-      } catch (err) {
-        console.warn('Erro ao inserir técnico no Supabase:', err);
-      }
-    }
+    currentUsers[index] = updatedAccount;
+    saveLocalUsers(currentUsers);
 
     return {
       success: true,
       user: {
-        id: newTechAccount.id,
-        login: newTechAccount.login,
-        nome: newTechAccount.nome,
-        email: newTechAccount.email,
-        perfil: newTechAccount.perfil
+        id: updatedAccount.id,
+        login: updatedAccount.login,
+        nome: updatedAccount.nome,
+        email: updatedAccount.email,
+        perfil: updatedAccount.perfil
       }
     };
+  },
+
+  // Excluir usuário pelo Administrador
+  async deleteUserByAdmin(id: string): Promise<{ success: boolean; error?: string }> {
+    const currentUsers = getLocalUsers();
+    const filtered = currentUsers.filter(u => u.id !== id);
+    if (filtered.length === currentUsers.length) {
+      return { success: false, error: 'Usuário não encontrado.' };
+    }
+    saveLocalUsers(filtered);
+    return { success: true };
+  },
+
+  // Public signup: cria 'Usuário'
+  async registerPublicUser(data: { nome: string; login: string; email?: string; senha: string }): Promise<{ success: boolean; user?: User; error?: string }> {
+    return this.createUserByAdmin({
+      ...data,
+      perfil: 'Usuário'
+    });
   },
 
   // Google Login / Cadastro com Google:
@@ -373,13 +491,12 @@ export const SupabaseService = {
     let existing = currentUsers.find(u => u.email?.toLowerCase() === cleanEmail || u.login.toLowerCase() === generatedLogin);
 
     if (!existing) {
-      // Create new Google account with default profile "Usuário"
       existing = {
         id: `google-${Date.now()}`,
         login: generatedLogin || `user_${Date.now().toString().slice(-4)}`,
         nome: displayName,
         email: cleanEmail,
-        perfil: 'Usuário', // Default strictly to Usuário
+        perfil: 'Usuário',
         criadoEm: new Date().toISOString(),
         origem: 'google'
       };
@@ -425,13 +542,7 @@ export const SupabaseService = {
           .select('*')
           .order('data_abertura', { ascending: false });
 
-        if (error) {
-          console.warn('Supabase getChamados error, usando fallback local:', error.message);
-          return getLocalChamados();
-        }
-
-        if (data) {
-          // Keep local mirror updated
+        if (!error && data) {
           saveLocalChamados(data as Chamado[]);
           return data as Chamado[];
         }
@@ -439,7 +550,6 @@ export const SupabaseService = {
         console.warn('Erro ao buscar do Supabase, usando local:', err);
       }
     }
-
     return getLocalChamados();
   },
 
@@ -451,6 +561,7 @@ export const SupabaseService = {
     equipamento?: string;
     titulo: string;
     descricao_problema: string;
+    prazo_horas?: number;
   }): Promise<Chamado> {
     const localList = getLocalChamados();
     const newId = generateChamadoId(localList);
@@ -469,14 +580,17 @@ export const SupabaseService = {
       data_abertura: nowIso,
       descricao_servico: null,
       data_encerramento: null,
-      tecnico_responsavel: null
+      tecnico_responsavel: null,
+      prazo_horas: payload.prazo_horas || (
+        payload.prioridade === 'Crítica' ? 6 :
+        payload.prioridade === 'Alta' ? 12 :
+        payload.prioridade === 'Média' ? 24 : 48
+      )
     };
 
-    // Save to local storage first
     const updated = [novoChamado, ...localList];
     saveLocalChamados(updated);
 
-    // Try Supabase if connected
     if (supabaseClient && currentConfig.enabled) {
       try {
         const { data, error } = await supabaseClient
@@ -485,9 +599,7 @@ export const SupabaseService = {
           .select()
           .single();
 
-        if (error) {
-          console.error('Erro ao inserir chamado no Supabase:', error.message);
-        } else if (data) {
+        if (!error && data) {
           return data as Chamado;
         }
       } catch (err) {
@@ -524,9 +636,7 @@ export const SupabaseService = {
           .select()
           .single();
 
-        if (error) {
-          console.error('Erro ao atualizar status no Supabase:', error.message);
-        } else if (data) {
+        if (!error && data) {
           return data as Chamado;
         }
       } catch (err) {
@@ -568,9 +678,7 @@ export const SupabaseService = {
           .select()
           .single();
 
-        if (error) {
-          console.error('Erro ao encerrar chamado no Supabase:', error.message);
-        } else if (data) {
+        if (!error && data) {
           return data as Chamado;
         }
       } catch (err) {
@@ -579,6 +687,22 @@ export const SupabaseService = {
     }
 
     return updatedChamado;
+  },
+
+  async deleteChamado(id: string): Promise<boolean> {
+    const localList = getLocalChamados();
+    const filtered = localList.filter(c => c.id !== id);
+    if (filtered.length === localList.length) return false;
+    saveLocalChamados(filtered);
+
+    if (supabaseClient && currentConfig.enabled) {
+      try {
+        await supabaseClient.from('chamados').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Erro ao deletar chamado no Supabase:', e);
+      }
+    }
+    return true;
   },
 
   async clearAllData(): Promise<void> {
@@ -592,4 +716,3 @@ export const SupabaseService = {
     }
   }
 };
-

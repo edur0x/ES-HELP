@@ -36,14 +36,16 @@ const QUICK_RESOLUTIONS = [
 
 export const TecnicoView: React.FC<TecnicoViewProps> = ({
   user,
-  chamados,
+  chamados = [],
   onUpdateStatusEmAtendimento,
   onEncerrarChamado,
+  onSelectChamado,
   onOpenChat,
   isProcessing = false
 }) => {
+  const safeChamados = Array.isArray(chamados) ? chamados : [];
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(
-    chamados.length > 0 ? chamados[0].id : null
+    safeChamados.length > 0 ? safeChamados[0]?.id || null : null
   );
   const [descricaoServico, setDescricaoServico] = useState('');
   const [statusFilter, setStatusFilter] = useState<'Todos' | 'Aberto' | 'Em Atendimento' | 'Encerrado'>('Todos');
@@ -52,13 +54,17 @@ export const TecnicoView: React.FC<TecnicoViewProps> = ({
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [isCadastrarTecnicoOpen, setIsCadastrarTecnicoOpen] = useState(false);
 
-  const selectedTicket = chamados.find(c => c.id === selectedTicketId) || chamados[0] || null;
+  const selectedTicket = safeChamados.find(c => c && c.id === selectedTicketId) || safeChamados[0] || null;
 
   const handleSelectTicket = (chamado: Chamado) => {
+    if (!chamado) return;
     setSelectedTicketId(chamado.id);
     setDescricaoServico(chamado.descricao_servico || '');
     setActionError(null);
     setActionSuccess(null);
+    if (onSelectChamado) {
+      onSelectChamado(chamado);
+    }
   };
 
   const handleIniciarAtendimento = async (chamado: Chamado) => {
@@ -97,18 +103,20 @@ export const TecnicoView: React.FC<TecnicoViewProps> = ({
     }
   };
 
-  const filteredChamados = chamados.filter((ch) => {
+  const filteredChamados = safeChamados.filter((ch) => {
+    if (!ch) return false;
+    const searchLower = (searchTerm || '').toLowerCase();
     const matchesSearch =
-      ch.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ch.solicitante.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ch.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ch.categoria.toLowerCase().includes(searchTerm.toLowerCase());
+      (ch.id || '').toLowerCase().includes(searchLower) ||
+      (ch.solicitante || '').toLowerCase().includes(searchLower) ||
+      (ch.titulo || '').toLowerCase().includes(searchLower) ||
+      (ch.categoria || '').toLowerCase().includes(searchLower);
 
     const matchesStatus = statusFilter === 'Todos' || ch.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const totalAtivos = chamados.filter(c => c.status !== 'Encerrado').length;
+  const totalAtivos = safeChamados.filter(c => c && c.status !== 'Encerrado').length;
 
   return (
     <div className="space-y-6">

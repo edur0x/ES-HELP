@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # Banco de Dados Relacional PostgreSQL 16
+  postgres:
+    image: postgres:16-alpine
+    container_name: helpdesk_postgres_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: helpdesk_user
+      POSTGRES_PASSWORD: helpdesk_password_2026
+      POSTGRES_DB: helpdesk_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U helpdesk_user -d helpdesk_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Interface Web leve para visualização das tabelas e dados no navegador (Opcional)
+  pgweb:
+    image: sosedoff/pgweb:latest
+    container_name: helpdesk_pgweb_admin
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - DATABASE_URL=postgres://helpdesk_user:helpdesk_password_2026@postgres:5432/helpdesk_db?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    driver: local

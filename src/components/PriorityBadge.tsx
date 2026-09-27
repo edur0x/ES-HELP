@@ -3,12 +3,15 @@ import { ChamadoPrioridade } from '../types';
 import { AlertTriangle, AlertCircle, ArrowDown, ArrowUp } from 'lucide-react';
 
 interface PriorityBadgeProps {
-  prioridade: ChamadoPrioridade;
+  prioridade?: ChamadoPrioridade | string;
+  priority?: ChamadoPrioridade | string;
 }
 
-export const PriorityBadge: React.FC<PriorityBadgeProps> = ({ prioridade }) => {
+export const PriorityBadge: React.FC<PriorityBadgeProps> = ({ prioridade, priority }) => {
+  const safePrioridade = prioridade || priority || 'Baixa';
+
   const getBadgeConfig = () => {
-    switch (prioridade) {
+    switch (safePrioridade) {
       case 'Crítica':
         return {
           bg: 'bg-rose-50 border-rose-300 text-rose-800',
@@ -34,14 +37,15 @@ export const PriorityBadge: React.FC<PriorityBadgeProps> = ({ prioridade }) => {
   };
 
   const config = getBadgeConfig();
+  const safeId = typeof safePrioridade === 'string' ? safePrioridade.toLowerCase() : 'baixa';
 
   return (
     <span
-      id={`priority-badge-${prioridade.toLowerCase()}`}
+      id={`priority-badge-${safeId}`}
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${config.bg}`}
     >
       {config.icon}
-      <span className="whitespace-nowrap">{prioridade}</span>
+      <span className="whitespace-nowrap">{safePrioridade}</span>
     </span>
   );
 };

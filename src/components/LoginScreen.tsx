@@ -267,7 +267,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                       type="text"
                       value={loginInput}
                       onChange={(e) => setLoginInput(e.target.value)}
-                      placeholder="operador, tecnico ou seu email"
+                      placeholder="admin, tecnico, usuario ou seu email"
                       required
                       className="block w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     />
@@ -304,6 +304,41 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                   <span>{isLoading ? 'Entrando...' : 'Entrar no Sistema'}</span>
                 </button>
               </form>
+
+              {/* Contas de Acesso Padrão */}
+              <div className="pt-3 border-t border-slate-800 text-[11px] text-slate-400 space-y-1">
+                <div className="text-slate-300 font-semibold mb-1">Perfis de Acesso Disponíveis:</div>
+                <div className="flex items-center justify-between">
+                  <span>👑 Administrador:</span>
+                  <button
+                    type="button"
+                    onClick={() => { setLoginInput('admin'); setPasswordInput('admin123'); }}
+                    className="text-indigo-400 hover:underline font-mono"
+                  >
+                    admin / admin123
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>🛠️ Técnico TI:</span>
+                  <button
+                    type="button"
+                    onClick={() => { setLoginInput('tecnico'); setPasswordInput('tecnico01'); }}
+                    className="text-amber-400 hover:underline font-mono"
+                  >
+                    tecnico / tecnico01
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>👤 Usuário Comum:</span>
+                  <button
+                    type="button"
+                    onClick={() => { setLoginInput('usuario'); setPasswordInput('usuario123'); }}
+                    className="text-emerald-400 hover:underline font-mono"
+                  >
+                    usuario / usuario123
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

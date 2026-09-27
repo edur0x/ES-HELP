@@ -6,15 +6,17 @@ import { User as UserType } from '../types';
 interface CadastrarTecnicoModalProps {
   isOpen: boolean;
   onClose: () => void;
-  currentUser: UserType;
+  currentUser?: UserType;
   onTecnicoCreated?: (newTech: UserType) => void;
+  onCreated?: (newTech: UserType) => void;
 }
 
 export const CadastrarTecnicoModal: React.FC<CadastrarTecnicoModalProps> = ({
   isOpen,
   onClose,
   currentUser,
-  onTecnicoCreated
+  onTecnicoCreated,
+  onCreated
 }) => {
   const [nome, setNome] = useState('');
   const [login, setLogin] = useState('');
@@ -67,6 +69,9 @@ export const CadastrarTecnicoModal: React.FC<CadastrarTecnicoModalProps> = ({
         setConfirmaSenha('');
         if (onTecnicoCreated) {
           onTecnicoCreated(res.user);
+        }
+        if (onCreated) {
+          onCreated(res.user);
         }
       }
     } catch (err: any) {
