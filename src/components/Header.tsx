@@ -156,15 +156,15 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {/* Docker / Local DB Quick Launcher */}
+              {/* PostgreSQL / Docker DB Quick Launcher */}
               {(isAdmin || isTecnico) && (
                 <button
                   onClick={onOpenDockerConfig}
-                  title="Configuração do Banco de Dados Docker Local"
+                  title="Script e Configuração do Banco de Dados PostgreSQL"
                   className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700 transition-colors"
                 >
-                  <Server size={13} className="text-blue-400" />
-                  <span className="hidden md:inline">Docker DB</span>
+                  <Server size={13} className="text-indigo-400" />
+                  <span className="hidden md:inline">PostgreSQL DB</span>
                 </button>
               )}
 

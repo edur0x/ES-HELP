@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Chamado, ChamadoPrioridade, User, ModeloFrequente } from '../types';
+import { Chamado, ChamadoPrioridade, User, ModeloFrequente, InventarioItem } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { ConfigOpcoesService } from '../services/configOpcoesService';
+import { InventarioService } from '../services/inventarioService';
 import {
   PlusCircle,
   List,
@@ -42,6 +43,7 @@ interface OperadorViewProps {
   onSelectChamado: (chamado: Chamado) => void;
   onOpenChat?: (chamadoId: string) => void;
   isSubmitting?: boolean;
+  initialEquipamento?: string;
 }
 
 const PRIORIDADES: ChamadoPrioridade[] = ['Baixa', 'Média', 'Alta', 'Crítica'];
@@ -52,19 +54,25 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
   onCreateChamado,
   onSelectChamado,
   onOpenChat,
-  isSubmitting = false
+  isSubmitting = false,
+  initialEquipamento = ''
 }) => {
+  // STRICT ACCESS: Equipamento/patrimônio is only visible for Administrador and Técnico
+  const isUsuarioComum = currentUser?.perfil === 'Usuário' || currentUser?.perfil === 'Operador';
+  const canViewEquipamento = currentUser?.perfil === 'Administrador' || currentUser?.perfil === 'Técnico';
+
   // Dynamic options loaded from ConfigOpcoesService
   const [tiposSolicitacao, setTiposSolicitacao] = useState<string[]>([]);
   const [categorias, setCategorias] = useState<string[]>([]);
   const [modelosFrequentes, setModelosFrequentes] = useState<ModeloFrequente[]>([]);
+  const [inventarioEquipamentos, setInventarioEquipamentos] = useState<InventarioItem[]>([]);
 
   // Form states
   const [solicitante, setSolicitante] = useState(currentUser?.nome || currentUser?.login || '');
   const [tipoSolicitacao, setTipoSolicitacao] = useState<string>('');
   const [categoria, setCategoria] = useState<string>('');
   const [prioridade, setPrioridade] = useState<ChamadoPrioridade>('Média');
-  const [equipamento, setEquipamento] = useState('');
+  const [equipamento, setEquipamento] = useState(canViewEquipamento ? initialEquipamento : '');
   const [titulo, setTitulo] = useState('');
   const [descricaoProblema, setDescricaoProblema] = useState('');
 
@@ -108,7 +116,16 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
 
   useEffect(() => {
     carregarOpcoes();
-  }, []);
+    if (canViewEquipamento) {
+      setInventarioEquipamentos(InventarioService.getItens());
+    }
+  }, [canViewEquipamento]);
+
+  useEffect(() => {
+    if (canViewEquipamento && initialEquipamento) {
+      setEquipamento(initialEquipamento);
+    }
+  }, [initialEquipamento, canViewEquipamento]);
 
   // Update solicitante if currentUser changes
   useEffect(() => {
@@ -228,8 +245,10 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
     setPrioridade(m.prioridade);
     setTitulo(m.titulo);
     setDescricaoProblema(m.descricao_padrao);
-    if (m.equipamento_sugerido) {
+    if (canViewEquipamento && m.equipamento_sugerido) {
       setEquipamento(m.equipamento_sugerido);
+    } else {
+      setEquipamento('');
     }
     setOptionActionMsg(`Modelo "${m.titulo}" aplicado ao formulário!`);
     setTimeout(() => setOptionActionMsg(null), 3000);
@@ -252,7 +271,7 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
         tipo_solicitacao: tipoSolicitacao || tiposSolicitacao[0],
         categoria: categoria || categorias[0],
         prioridade,
-        equipamento: equipamento.trim() || undefined,
+        equipamento: canViewEquipamento ? (equipamento.trim() || undefined) : undefined,
         titulo: titulo.trim(),
         descricao_problema: descricaoProblema.trim()
       });
@@ -270,7 +289,6 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
   // "um perfil de Usuario onde o usuário possa abrir chamados e ao abrir chamado poder conversar no chatonline em tempo real e cada usuário tenha acessa apenas ao ambiente do sua acesso"
   // For 'Usuário' profile, filter chamados strictly to tickets requested by this user!
   const safeChamados = Array.isArray(chamados) ? chamados : [];
-  const isUsuarioComum = currentUser?.perfil === 'Usuário' || currentUser?.perfil === 'Operador';
   const userNomeLower = (currentUser?.nome || '').toLowerCase();
   const userLoginLower = (currentUser?.login || '').toLowerCase();
 
@@ -525,7 +543,7 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
           </div>
 
           {/* Prioridade e Equipamento */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className={canViewEquipamento ? "grid grid-cols-1 sm:grid-cols-2 gap-3" : "grid grid-cols-1 gap-3"}>
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Prioridade Estimada
@@ -541,18 +559,38 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
               </select>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                Equipamento / Patrimônio
-              </label>
-              <input
-                type="text"
-                value={equipamento}
-                onChange={(e) => setEquipamento(e.target.value)}
-                placeholder="Ex: NOTE-001 ou Impressora HP"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
+            {canViewEquipamento && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Equipamento / Patrimônio
+                  </label>
+                  <span className="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-medium border border-indigo-100">
+                    Controle de Ativos TI
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  list="patrimonios-cadastrados-sugestoes"
+                  value={equipamento}
+                  onChange={(e) => setEquipamento(e.target.value)}
+                  placeholder="Ex: NOTE-001, DESK-014 ou selecione do inventário"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                {inventarioEquipamentos.length > 0 && (
+                  <datalist id="patrimonios-cadastrados-sugestoes">
+                    {inventarioEquipamentos.map(item => (
+                      <option key={item.id} value={item.patrimonio}>
+                        {item.nome} ({item.tipo} - {item.setor || 'Geral'})
+                      </option>
+                    ))}
+                  </datalist>
+                )}
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Visível apenas para Administradores e Técnicos para controle patrimonial.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Título do Chamado */}
@@ -726,7 +764,7 @@ export const OperadorView: React.FC<OperadorViewProps> = ({
                   <span>Categoria: <strong className="text-slate-700">{ch.categoria}</strong></span>
                   <span aria-hidden="true">·</span>
                   <span>Tipo: <strong className="text-slate-700">{ch.tipo_solicitacao}</strong></span>
-                  {ch.equipamento && (
+                  {canViewEquipamento && ch.equipamento && (
                     <>
                       <span aria-hidden="true">·</span>
                       <span>Equipamento: <strong className="text-slate-700">{ch.equipamento}</strong></span>

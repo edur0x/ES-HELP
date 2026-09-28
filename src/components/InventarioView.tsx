@@ -23,7 +23,8 @@ import {
   Tag,
   Calendar,
   Layers,
-  Sparkles
+  Sparkles,
+  FilePlus
 } from 'lucide-react';
 
 interface InventarioViewProps {
@@ -468,6 +469,16 @@ export const InventarioView: React.FC<InventarioViewProps> = ({ currentUser, onS
                     {/* Ações */}
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {onSelectEquipamentoParaChamado && (
+                          <button
+                            onClick={() => onSelectEquipamentoParaChamado(`${item.patrimonio} - ${item.nome}`)}
+                            className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                            title="Abrir chamado para este equipamento"
+                          >
+                            <FilePlus size={14} />
+                          </button>
+                        )}
+
                         <button
                           onClick={() => openEditItemModal(item)}
                           className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"

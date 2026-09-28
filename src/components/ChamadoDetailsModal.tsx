@@ -1,17 +1,20 @@
 import React from 'react';
-import { Chamado } from '../types';
+import { Chamado, User } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
-import { Clock, CheckCircle2, User, Laptop, Tag, Layers, FileText, Wrench, X, MessageSquare, Paperclip } from 'lucide-react';
+import { Clock, CheckCircle2, User as UserIcon, Laptop, Tag, Layers, FileText, Wrench, X, MessageSquare, Paperclip } from 'lucide-react';
 
 interface ChamadoDetailsModalProps {
   chamado: Chamado | null;
   onClose: () => void;
   onOpenChat?: (chamadoId: string) => void;
+  currentUser?: User | null;
 }
 
-export const ChamadoDetailsModal: React.FC<ChamadoDetailsModalProps> = ({ chamado, onClose, onOpenChat }) => {
+export const ChamadoDetailsModal: React.FC<ChamadoDetailsModalProps> = ({ chamado, onClose, onOpenChat, currentUser }) => {
   if (!chamado) return null;
+
+  const canViewEquipamento = currentUser?.perfil === 'Administrador' || currentUser?.perfil === 'Técnico';
 
   return (
     <div
@@ -51,7 +54,7 @@ export const ChamadoDetailsModal: React.FC<ChamadoDetailsModalProps> = ({ chamad
           {/* Info Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200 text-xs">
             <div className="flex items-start gap-2">
-              <User size={15} className="text-slate-400 mt-0.5" />
+              <UserIcon size={15} className="text-slate-400 mt-0.5" />
               <div>
                 <span className="text-[11px] font-bold text-slate-400 uppercase block">Solicitante</span>
                 <strong className="text-slate-900 text-xs sm:text-sm">{chamado.solicitante}</strong>
@@ -74,13 +77,15 @@ export const ChamadoDetailsModal: React.FC<ChamadoDetailsModalProps> = ({ chamad
               </div>
             </div>
 
-            <div className="flex items-start gap-2">
-              <Laptop size={15} className="text-slate-400 mt-0.5" />
-              <div>
-                <span className="text-[11px] font-bold text-slate-400 uppercase block">Equipamento / Patrimônio</span>
-                <strong className="text-slate-900">{chamado.equipamento || 'Não informado'}</strong>
+            {canViewEquipamento && (
+              <div className="flex items-start gap-2">
+                <Laptop size={15} className="text-slate-400 mt-0.5" />
+                <div>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase block">Equipamento / Patrimônio</span>
+                  <strong className="text-slate-900">{chamado.equipamento || 'Não informado'}</strong>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Description */}

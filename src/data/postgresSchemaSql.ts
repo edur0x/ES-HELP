@@ -1,13 +1,14 @@
--- ==============================================================================
+export const POSTGRES_SCHEMA_SQL = `-- ==============================================================================
 -- SISTEMA DE GESTÃO DE CHAMADOS TI & INVENTÁRIO CORPORATIVO DE EQUIPAMENTOS
 -- SCRIPT COMPLETO DE DEFINIÇÃO E CARGA DE DADOS PARA POSTGRESQL (13 / 14 / 15 / 16)
--- Arquivo: /docker/init.sql (Executado automaticamente ao iniciar o Docker Compose)
+-- Arquivo: postgres_setup.sql
 -- ==============================================================================
 
+-- 1. EXTENSÕES DO POSTGRESQL
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
--- 1. TABELA DE USUÁRIOS
+-- 2. TABELA: USUÁRIOS DO SISTEMA
 CREATE TABLE IF NOT EXISTS usuarios (
     id VARCHAR(64) PRIMARY KEY DEFAULT ('usr-' || substr(md5(random()::text), 1, 8)),
     login VARCHAR(100) UNIQUE NOT NULL,
@@ -22,7 +23,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     atualizado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. TABELA DE INVENTÁRIO DE EQUIPAMENTOS
+-- 3. TABELA: INVENTÁRIO DE EQUIPAMENTOS DA EMPRESA
 CREATE TABLE IF NOT EXISTS inventario_equipamentos (
     id VARCHAR(64) PRIMARY KEY DEFAULT ('inv-' || substr(md5(random()::text), 1, 8)),
     patrimonio VARCHAR(100) UNIQUE NOT NULL,
@@ -44,7 +45,7 @@ CREATE TABLE IF NOT EXISTS inventario_equipamentos (
     atualizado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3. TABELA DE CAMPOS CUSTOMIZADOS DO INVENTÁRIO
+-- 4. TABELA: DEFINIÇÃO DE CAMPOS CUSTOMIZADOS DO INVENTÁRIO
 CREATE TABLE IF NOT EXISTS inventario_campos (
     id VARCHAR(64) PRIMARY KEY,
     chave VARCHAR(100) UNIQUE NOT NULL,
@@ -56,7 +57,7 @@ CREATE TABLE IF NOT EXISTS inventario_campos (
     placeholder VARCHAR(255)
 );
 
--- 4. TABELA DE CHAMADOS TÉCNICOS
+-- 5. TABELA: CHAMADOS TÉCNICOS DE TI
 CREATE TABLE IF NOT EXISTS chamados (
     id VARCHAR(64) PRIMARY KEY,
     solicitante VARCHAR(255) NOT NULL,
@@ -78,7 +79,7 @@ CREATE TABLE IF NOT EXISTS chamados (
     atualizado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 5. TABELA DE OPÇÕES DINÂMICAS E MODELOS FREQUENTES
+-- 6. TABELA: OPÇÕES DINÂMICAS E MODELOS FREQUENTES
 CREATE TABLE IF NOT EXISTS config_opcoes (
     id VARCHAR(64) PRIMARY KEY,
     grupo VARCHAR(50) NOT NULL,
@@ -87,7 +88,7 @@ CREATE TABLE IF NOT EXISTS config_opcoes (
     criado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 6. TABELA DE AVISOS E BANNERS
+-- 7. TABELA: AVISOS E BANNERS INFORMATIVOS
 CREATE TABLE IF NOT EXISTS avisos_banners (
     id VARCHAR(64) PRIMARY KEY,
     titulo VARCHAR(255) NOT NULL,
@@ -101,7 +102,7 @@ CREATE TABLE IF NOT EXISTS avisos_banners (
     criado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 7. TABELA DE MENSAGENS DO CHAT
+-- 8. TABELA: MENSAGENS DO CHAT ONLINE EM TEMPO REAL
 CREATE TABLE IF NOT EXISTS mensagens_chat (
     id VARCHAR(64) PRIMARY KEY DEFAULT ('msg-' || substr(md5(random()::text), 1, 8)),
     chamado_id VARCHAR(64) NOT NULL,
@@ -114,19 +115,20 @@ CREATE TABLE IF NOT EXISTS mensagens_chat (
     criado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- ÍNDICES DE PERFORMANCE
+-- 9. ÍNDICES DE ALTA PERFORMANCE
 CREATE INDEX IF NOT EXISTS idx_chamados_status ON chamados(status);
 CREATE INDEX IF NOT EXISTS idx_chamados_prioridade ON chamados(prioridade);
 CREATE INDEX IF NOT EXISTS idx_chamados_solicitante ON chamados(solicitante);
 CREATE INDEX IF NOT EXISTS idx_chamados_equipamento ON chamados(equipamento);
 CREATE INDEX IF NOT EXISTS idx_chamados_data_abertura ON chamados(data_abertura DESC);
+CREATE INDEX IF NOT EXISTS idx_chamados_tecnico ON chamados(tecnico_responsavel);
 CREATE INDEX IF NOT EXISTS idx_inventario_patrimonio ON inventario_equipamentos(patrimonio);
 CREATE INDEX IF NOT EXISTS idx_inventario_status ON inventario_equipamentos(status);
 CREATE INDEX IF NOT EXISTS idx_inventario_setor ON inventario_equipamentos(setor);
 CREATE INDEX IF NOT EXISTS idx_chat_chamado ON mensagens_chat(chamado_id, criado_em);
 CREATE INDEX IF NOT EXISTS idx_usuarios_login ON usuarios(login);
 
--- TRIGGER AUTOMÁTICO DE TIMESTAMP
+-- 10. FUNÇÃO E TRIGGERS PARA ATUALIZAR TIMESTAMPS AUTOMATICAMENTE
 CREATE OR REPLACE FUNCTION fn_atualizar_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -150,7 +152,7 @@ CREATE TRIGGER trg_atualizar_timestamp_chamados
 BEFORE UPDATE ON chamados
 FOR EACH ROW EXECUTE FUNCTION fn_atualizar_timestamp();
 
--- VIEWS ANALÍTICAS
+-- 11. VIEWS ANALÍTICAS
 CREATE OR REPLACE VIEW vw_chamados_detalhados AS
 SELECT 
     c.*,
@@ -175,7 +177,7 @@ SELECT
     ) AS taxa_resolucao_pct
 FROM chamados;
 
--- CARGA DE DADOS INICIAIS (SEEDS)
+-- 12. CARGA DE DADOS INICIAIS (SEEDS)
 INSERT INTO usuarios (id, login, nome, email, senha, perfil, ativo, origem)
 VALUES 
     ('usr-admin-01', 'admin', 'Administrador TI', 'admin@empresa.com', 'admin123', 'Administrador', TRUE, 'local'),
@@ -223,3 +225,4 @@ INSERT INTO avisos_banners (id, titulo, mensagem, tipo, ativo, criado_por, perfi
 VALUES
     ('aviso-001', 'Manutenção Programada no Servidor de Banco de Dados', 'Janela de manutenção técnica e backup hoje às 22h00 com duração estimada de 30 minutos.', 'aviso', TRUE, 'Administrador TI', 'Administrador', CURRENT_DATE + INTERVAL '7 days', CURRENT_TIMESTAMP)
 ON CONFLICT (id) DO NOTHING;
+`;

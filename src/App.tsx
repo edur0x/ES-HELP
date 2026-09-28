@@ -51,8 +51,9 @@ export default function App() {
   });
   const [isAvisosModalOpen, setIsAvisosModalOpen] = useState<boolean>(false);
 
-  // Admin view mode toggle when in 'chamados' tab: 'atendimento' or 'novo_chamado'
+  // Admin / Técnico view mode toggle when in 'chamados' tab: 'atendimento' or 'novo_chamado'
   const [adminChamadosMode, setAdminChamadosMode] = useState<'atendimento' | 'novo_chamado'>('atendimento');
+  const [prefilledEquipamento, setPrefilledEquipamento] = useState<string>('');
 
   // Modals state
   const [selectedChamadoForDetails, setSelectedChamadoForDetails] = useState<Chamado | null>(null);
@@ -226,11 +227,11 @@ export default function App() {
                 {/* TAB 1: CHAMADOS */}
                 {activeTab === 'chamados' && (
                   <div className="space-y-4">
-                    {/* Admin Switch between Queue and Opening form */}
-                    {currentUser.perfil === 'Administrador' && (
+                    {/* Admin / Técnico Switch between Queue and Opening form */}
+                    {(currentUser.perfil === 'Administrador' || currentUser.perfil === 'Técnico') && (
                       <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
                         <div className="text-xs font-bold text-slate-700">
-                          Visão do Administrador:
+                          Modo {currentUser.perfil}:
                         </div>
                         <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg text-xs">
                           <button
@@ -251,20 +252,25 @@ export default function App() {
                                 : 'text-slate-600 hover:text-slate-900'
                             }`}
                           >
-                            Abrir Chamado / Modelos Frequentes
+                            Abrir Chamado / Controle de Ativos
                           </button>
                         </div>
                       </div>
                     )}
 
-                    {currentUser.perfil === 'Administrador' && adminChamadosMode === 'novo_chamado' ? (
+                    {(currentUser.perfil === 'Administrador' || currentUser.perfil === 'Técnico') && adminChamadosMode === 'novo_chamado' ? (
                       <OperadorView
                         currentUser={currentUser}
                         chamados={chamados}
-                        onCreateChamado={handleCreateChamado}
+                        onCreateChamado={async (dados) => {
+                          const res = await handleCreateChamado(dados);
+                          setPrefilledEquipamento('');
+                          return res;
+                        }}
                         onSelectChamado={(ch) => setSelectedChamadoForDetails(ch)}
                         onOpenChat={handleOpenChat}
                         isSubmitting={isSubmitting}
+                        initialEquipamento={prefilledEquipamento}
                       />
                     ) : (
                       <TecnicoView
@@ -285,6 +291,7 @@ export default function App() {
                   <InventarioView
                     currentUser={currentUser}
                     onSelectEquipamentoParaChamado={(eqNome) => {
+                      setPrefilledEquipamento(eqNome);
                       setActiveTab('chamados');
                       setAdminChamadosMode('novo_chamado');
                     }}
@@ -318,6 +325,7 @@ export default function App() {
         chamado={selectedChamadoForDetails}
         onClose={() => setSelectedChamadoForDetails(null)}
         onOpenChat={handleOpenChat}
+        currentUser={currentUser}
       />
 
       {/* Online Chat Modal with Attachment Support */}
